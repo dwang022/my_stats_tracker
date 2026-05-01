@@ -1771,7 +1771,6 @@ if page == "Trading Card":
             from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
             from io import BytesIO
             from rembg import remove
-            import os
 
             progress = st.progress(0)
             status = st.empty()
@@ -1784,45 +1783,18 @@ if page == "Trading Card":
                     value = str(value).strip()
                     return value if value else fallback
 
-
                 def fit_font(draw_obj, text, font_path, max_width, start_size, min_size=16):
-                    cloud_font = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-                    mac_font = "/System/Library/Fonts/Helvetica.ttc"
-                
-                    if os.path.exists(cloud_font):
-                        font_path = cloud_font
-                    elif os.path.exists(mac_font):
-                        font_path = mac_font
-                    else:
-                        raise FileNotFoundError("No usable font found.")
-                
+                    if font_path is None:
+                        return ImageFont.load_default()
                     size = start_size
                     while size >= min_size:
                         font = ImageFont.truetype(font_path, size)
                         bbox = draw_obj.textbbox((0, 0), text, font=font)
                         width = bbox[2] - bbox[0]
-                
                         if width <= max_width:
                             return font
-                
                         size -= 2
-                
                     return ImageFont.truetype(font_path, min_size)
-
-                def get_font_path():
-                    font_candidates = [
-                        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
-                        "/System/Library/Fonts/Helvetica.ttc",
-                        "/Library/Fonts/Arial.ttf",
-                    ]
-                
-                    for path in font_candidates:
-                        if os.path.exists(path):
-                            return path
-                
-                    return None
 
                 def add_subtle_noise(img, opacity=18):
                     W, H = img.size
@@ -1966,9 +1938,8 @@ if page == "Trading Card":
                 draw = ImageDraw.Draw(card_bg)
 
                 panel_top = int(H * 0.735)
-                
                 # font_path = "/System/Library/Fonts/Helvetica.ttc"
-                font_path = get_font_path()
+                font_path = "Inter-Regular.ttf"
 
                 # Header band
                 header_overlay = Image.new("RGBA", card_bg.size, (0, 0, 0, 0))
@@ -2026,10 +1997,10 @@ if page == "Trading Card":
                 card_bg = Image.alpha_composite(card_bg, shine)
                 draw = ImageDraw.Draw(card_bg)
 
-                # try:
-                #     ImageFont.truetype(font_path, 20)
-                # except:
-                #     font_path = None
+                try:
+                    ImageFont.truetype(font_path, 20)
+                except:
+                    font_path = None
 
                 # Nameplate
                 name_text = safe_text(card_name, "PLAYER").upper()
