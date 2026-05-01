@@ -1783,17 +1783,26 @@ if page == "Trading Card":
                     value = str(value).strip()
                     return value if value else fallback
 
+
                 def fit_font(draw_obj, text, font_path, max_width, start_size, min_size=16):
                     if font_path is None:
                         return ImageFont.load_default()
+                
                     size = start_size
                     while size >= min_size:
-                        font = ImageFont.truetype(font_path, size)
+                        try:
+                            font = ImageFont.truetype(font_path, size)
+                        except:
+                            return ImageFont.load_default()
+                
                         bbox = draw_obj.textbbox((0, 0), text, font=font)
                         width = bbox[2] - bbox[0]
+                
                         if width <= max_width:
                             return font
+                
                         size -= 2
+                
                     return ImageFont.truetype(font_path, min_size)
 
                 def add_subtle_noise(img, opacity=18):
@@ -1824,6 +1833,22 @@ if page == "Trading Card":
 
                 def crop_or_pad_to_card(img, size=(1024, 1024)):
                     return img.resize(size, Image.Resampling.LANCZOS)
+
+                import os
+                
+                def get_font_path():
+                    possible_fonts = [
+                        "/System/Library/Fonts/Helvetica.ttc",  # Mac
+                        "/Library/Fonts/Arial.ttf",             # Mac
+                        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Streamlit/Linux
+                        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+                    ]
+                
+                    for path in possible_fonts:
+                        if os.path.exists(path):
+                            return path
+                
+                    return None
 
                 def jersey_number_badge(draw_obj, number, font_path, cx, cy, radius=50):
                     draw_obj.ellipse(
@@ -1938,7 +1963,9 @@ if page == "Trading Card":
                 draw = ImageDraw.Draw(card_bg)
 
                 panel_top = int(H * 0.735)
-                font_path = "/System/Library/Fonts/Helvetica.ttc"
+                
+                # font_path = "/System/Library/Fonts/Helvetica.ttc"
+                font_path = get_font_path()
 
                 # Header band
                 header_overlay = Image.new("RGBA", card_bg.size, (0, 0, 0, 0))
