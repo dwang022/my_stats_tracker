@@ -1784,18 +1784,21 @@ if page == "Trading Card":
                     value = str(value).strip()
                     return value if value else fallback
 
+
                 def fit_font(draw_obj, text, font_path, max_width, start_size, min_size=16):
+                    cloud_font = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+                    mac_font = "/System/Library/Fonts/Helvetica.ttc"
+                
+                    if os.path.exists(cloud_font):
+                        font_path = cloud_font
+                    elif os.path.exists(mac_font):
+                        font_path = mac_font
+                    else:
+                        raise FileNotFoundError("No usable font found.")
+                
                     size = start_size
-                
                     while size >= min_size:
-                        try:
-                            if font_path is not None:
-                                font = ImageFont.truetype(font_path, size)
-                            else:
-                                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
-                        except:
-                            font = ImageFont.load_default()
-                
+                        font = ImageFont.truetype(font_path, size)
                         bbox = draw_obj.textbbox((0, 0), text, font=font)
                         width = bbox[2] - bbox[0]
                 
@@ -1804,10 +1807,7 @@ if page == "Trading Card":
                 
                         size -= 2
                 
-                    try:
-                        return ImageFont.truetype(font_path, min_size)
-                    except:
-                        return ImageFont.load_default()
+                    return ImageFont.truetype(font_path, min_size)
 
                 def get_font_path():
                     font_candidates = [
@@ -2026,10 +2026,10 @@ if page == "Trading Card":
                 card_bg = Image.alpha_composite(card_bg, shine)
                 draw = ImageDraw.Draw(card_bg)
 
-                try:
-                    ImageFont.truetype(font_path, 20)
-                except:
-                    font_path = None
+                # try:
+                #     ImageFont.truetype(font_path, 20)
+                # except:
+                #     font_path = None
 
                 # Nameplate
                 name_text = safe_text(card_name, "PLAYER").upper()
