@@ -1,3 +1,4 @@
+\usepackage{hyperref}
 \section*{AI Sports Stats Tracker \& Trading Card Generator}
 
 An interactive full-stack-style sports analytics application built with Python and Streamlit that allows users to:
