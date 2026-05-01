@@ -1,104 +1,105 @@
-\usepackage{hyperref}
-\section*{AI Sports Stats Tracker \& Trading Card Generator}
+# AI Sports Stats Tracker & Trading Card Generator
 
 An interactive full-stack-style sports analytics application built with Python and Streamlit that allows users to:
 
-\begin{itemize}
-    \item Track and analyze basketball, football, and baseball statistics
-    \item Compare performances to real professional athletes using similarity algorithms
-    \item Generate AI-powered custom sports trading cards
-    \item Create downloadable personalized player cards with dynamic stats and pro comparisons
-\end{itemize}
+- Track and analyze basketball, football, and baseball statistics
+- Compare performances to real professional athletes using similarity algorithms
+- Generate AI-powered custom sports trading cards
+- Create downloadable personalized player cards with dynamic stats and pro comparisons
 
-\section*{Features}
+---
 
-\subsection*{Sports Stat Tracking}
-\begin{itemize}
-    \item Basketball stat tracking and analytics
-    \item Football stat tracking and player comparison
-    \item Baseball stat tracking
-    \item Game logging and performance summaries
-\end{itemize}
+# Try It Out
 
-\subsection*{Pro Player Comparison Engine}
+🔗 Live App: [Try the App Here](https://mystatstracker.streamlit.app/)
+
+---
+
+# Features
+
+## Sports Stat Tracking
+
+- Basketball stat tracking and analytics
+- Football stat tracking and player comparison
+- Baseball stat tracking
+- Game logging and performance summaries
+
+## Pro Player Comparison Engine
+
 Uses weighted statistical similarity formulas to compare user performance against real professional athletes:
-\begin{itemize}
-    \item NBA player comparisons
-    \item NFL player comparisons
-    \item Position-specific football comparisons
-\end{itemize}
 
-\subsection*{AI Trading Card Generator}
+- NBA player comparisons
+- NFL player comparisons
+- Position-specific football comparisons
+
+## AI Trading Card Generator
+
 Generate custom AI-enhanced sports trading cards featuring:
-\begin{itemize}
-    \item Personalized stats
-    \item Player images with automatic background removal
-    \item AI-generated stadium/card backgrounds using DALL·E 3
-    \item Dynamic pro-player comparisons
-    \item Team-inspired visual themes
-    \item Downloadable high-resolution card output
-\end{itemize}
 
-\section*{Sample Trading Card}
+- Personalized stats
+- Player images with automatic background removal
+- AI-generated stadium/card backgrounds using DALL·E 3
+- Dynamic pro-player comparisons
+- Team-inspired visual themes
+- Downloadable high-resolution card output
 
-\begin{center}
-    \includegraphics[width=0.45\textwidth]{sample_card.png}
-\end{center}
+---
 
-\section*{Tech Stack}
+# Sample Trading Card
 
-\subsection*{Frontend}
-\begin{itemize}
-    \item Streamlit
-\end{itemize}
+![Sample Card](sample_card.png)
 
-\subsection*{Backend / Data}
-\begin{itemize}
-    \item Python
-    \item Pandas
-    \item SQLite
-\end{itemize}
+---
 
-\subsection*{APIs \& AI}
-\begin{itemize}
-    \item OpenAI API (DALL·E 3)
-    \item Anthropic API
-\end{itemize}
+# Tech Stack
 
-\subsection*{Computer Vision / Imaging}
-\begin{itemize}
-    \item Pillow (PIL)
-    \item rembg
-    \item onnxruntime
-\end{itemize}
+## Frontend
 
-\subsection*{Sports Data}
-\begin{itemize}
-    \item nba\_api
-    \item nflreadpy
-    \item pybaseball
-\end{itemize}
+- Streamlit
 
-\section*{How It Works}
+## Backend / Data
 
-\subsection*{Trading Card Pipeline}
-\begin{enumerate}
-    \item User uploads player image
-    \item Background is removed using rembg
-    \item DALL·E 3 generates a custom sports-card-style background
-    \item Player stats and pro comparisons are calculated
-    \item PIL composites the final trading card
-    \item User downloads the completed card
-\end{enumerate}
+- Python
+- Pandas
+- SQLite
 
+## APIs & AI
 
-\section*{Future Improvements}
+- OpenAI API (DALL·E 3)
+- Anthropic API
 
-\begin{itemize}
-    \item User authentication
-    \item Cloud database integration (Supabase/PostgreSQL)
-    \item Persistent user accounts
-    \item Mobile-friendly redesign
-    \item Build out a coaches view
-    \item Custom trading card rarity systems
-\end{itemize}
+## Computer Vision / Imaging
+
+- Pillow (PIL)
+- rembg
+- onnxruntime
+
+## Sports Data
+
+- nba_api
+- nflreadpy
+- pybaseball
+
+---
+
+# How It Works
+
+## Trading Card Pipeline
+
+1. User uploads player image
+2. Background is removed using rembg
+3. DALL·E 3 generates a custom sports-card-style background
+4. Player stats and pro comparisons are calculated
+5. PIL composites the final trading card
+6. User downloads the completed card
+
+---
+
+# Future Improvements
+
+- User authentication
+- Cloud database integration (Supabase/PostgreSQL)
+- Persistent user accounts
+- Mobile-friendly redesign
+- Build out a coaches view
+- Custom trading card rarity systems
