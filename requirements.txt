@@ -1,0 +1,13 @@
+streamlit
+pandas
+plotly
+pillow
+requests
+openai
+anthropic
+nba_api
+pybaseball
+nflreadpy
+polars[rtcompat]
+rembg
+onnxruntime
