@@ -7,7 +7,10 @@ import nflreadpy as nfl
 import sqlite3
 import anthropic
 import openai
-import hashlib # add
+import hashlib
+
+from ai_coach import render_ai_coach_section, render_coach_roster_ai_report
+
 
 
 # We need a virtual environment and to install all of our packages in it then activate it and run app
@@ -544,6 +547,8 @@ if page == "My Stats Tracker" and sport == "Basketball":
                             title=f"{trend_choice} Over Time")
         st.plotly_chart(trend_fig, use_container_width=True)
 
+        render_ai_coach_section("Basketball", st.session_state.my_games) # NEW
+
         st.subheader("My Game Log")
         log_cols = ["Date", "Opponent", "Team Score", "Opponent Score",
                     "Points", "Rebounds", "Assists", "Steals", "Blocks", "Turnovers"]
@@ -602,35 +607,41 @@ if page == "My Stats Tracker" and sport == "Baseball":
 
     with hitting_tab:
         st.subheader("Add a Game")
-
+ 
         with st.form("my_baseball_form"):
-            st.subheader("Game Info")
-            info1, info2, info3 = st.columns([1, 1.5, 1])
+            # Game info row
+            info1, info2, info3, info4 = st.columns([1.2, 1.5, 1, 1])
             with info1:
                 game_date = st.date_input("Game Date", key="baseball_date")
             with info2:
-                opponent = st.text_input("Opponent", key="baseball_opponent")
+                opponent  = st.text_input("Opponent", key="baseball_opponent")
             with info3:
-                s1, s2 = st.columns(2)
-                with s1: team_runs = st.number_input("My Team", min_value=0, step=1, key="team_runs")
-                with s2: opp_runs  = st.number_input("Opponent", min_value=0, step=1, key="opp_runs")
-
-            st.subheader("My Hitting Stats")
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                at_bats = st.number_input("At Bats", min_value=0, step=1, key="bb_ab")
-                hits    = st.number_input("Hits",    min_value=0, step=1, key="bb_h")
-            with c2:
-                runs = st.number_input("Runs", min_value=0, step=1, key="bb_r")
-                rbis = st.number_input("RBIs", min_value=0, step=1, key="bb_rbi")
-            with c3:
-                walks      = st.number_input("Walks",      min_value=0, step=1, key="bb_bb")
-                strikeouts = st.number_input("Strikeouts", min_value=0, step=1, key="bb_so")
-            with c4:
-                doubles      = st.number_input("Doubles",     min_value=0, step=1, key="bb_2b")
-                triples      = st.number_input("Triples",     min_value=0, step=1, key="bb_3b")
-                home_runs    = st.number_input("Home Runs",   min_value=0, step=1, key="bb_hr")
-                stolen_bases = st.number_input("Stolen Bases",min_value=0, step=1, key="bb_sb")
+                team_runs = st.number_input("My Team Runs", min_value=0, step=1, key="team_runs")
+            with info4:
+                opp_runs  = st.number_input("Opp Runs",     min_value=0, step=1, key="opp_runs")
+ 
+            st.markdown("**Hitting Stats**")
+ 
+            # Row 1: plate appearances
+            r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+            with r1c1: at_bats    = st.number_input("At Bats",    min_value=0, step=1, key="bb_ab")
+            with r1c2: hits       = st.number_input("Hits",       min_value=0, step=1, key="bb_h")
+            with r1c3: walks      = st.number_input("Walks",      min_value=0, step=1, key="bb_bb")
+            with r1c4: strikeouts = st.number_input("Strikeouts", min_value=0, step=1, key="bb_so")
+ 
+            # Row 2: production
+            r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+            with r2c1: runs       = st.number_input("Runs",       min_value=0, step=1, key="bb_r")
+            with r2c2: rbis       = st.number_input("RBIs",       min_value=0, step=1, key="bb_rbi")
+            with r2c3: home_runs  = st.number_input("Home Runs",  min_value=0, step=1, key="bb_hr")
+            with r2c4: doubles = st.number_input("Doubles", min_value=0, step=1, key="bb_2b")
+                 
+            # Row 3: hit types
+            r3c1, r3c2, r3c3, r3c4 = st.columns(4)
+            with r3c1: triples = st.number_input("Triples", min_value=0, step=1, key="bb_3b")
+            with r3c2: stolen_bases = st.number_input("Stolen Bases", min_value=0, step=1, key="bb_sb")
+            with r3c3: st.empty()   # spacer
+            with r3c4: st.empty()   # spacer
 
             submitted = st.form_submit_button("Add Hitting Game")
             if submitted:
@@ -771,6 +782,8 @@ if page == "My Stats Tracker" and sport == "Baseball":
                                 markers=True, hover_data=["Opponent"],
                                 title=f"{trend_choice} Over Time")
             st.plotly_chart(trend_fig, use_container_width=True)
+
+            render_ai_coach_section("Baseball Hitting", st.session_state.my_baseball_games) # NEW
 
             st.subheader("My Game Log")
             h_log = baseball_games[BASEBALL_COLUMNS].copy()
@@ -952,6 +965,8 @@ if page == "My Stats Tracker" and sport == "Baseball":
                                   markers=True, hover_data=["Opponent", "Result"],
                                   title=f"{p_trend_choice} Over Time")
             st.plotly_chart(p_trend_fig, use_container_width=True)
+
+            render_ai_coach_section("Baseball Pitching", st.session_state.my_pitching_games) # NEW
 
             st.subheader("My Pitching Game Log")
             p_log = pitch_games[PITCHING_COLUMNS].copy()
@@ -1388,6 +1403,9 @@ if page == "My Stats Tracker" and sport == "Football":
                             title=f"{trend_choice} Over Time")
         st.plotly_chart(trend_fig, use_container_width=True)
 
+        render_ai_coach_section(f"Football {football_mode}", st.session_state[session_key]) # NEW
+        
+
         st.subheader("My Game Log")
         f_log = football_games[FOOTBALL_COLUMNS].copy()
         f_log["Date"] = f_log["Date"].dt.strftime("%Y-%m-%d")
@@ -1437,12 +1455,12 @@ if page == "Trading Card":
 
     with col1:
         card_name = st.text_input("Your Name")
-        card_team = st.text_input("Favorite Team (e.g. Lakers, Yankees, Chiefs)")
+        card_team = st.text_input("Team")
         card_age = st.number_input("Your Age", min_value=10, max_value=80, value=25)
 
     with col2:
         card_sport = sport
-        card_position = st.text_input("Position (e.g. Point Guard, QB, Outfielder)")
+        card_position = st.text_input("Position")
         card_number = st.text_input("Jersey Number")
 
     uploaded_photo = st.file_uploader("Upload your photo", type=["jpg", "jpeg", "png"])
@@ -2173,21 +2191,85 @@ if page == "Trading Card":
             st.success("Card generated!")
 
 
-# Coaches View Page
+# ============================================================
+# COACHES VIEW — REFORMED
+# ============================================================
+# HOW TO USE:
+#   Replace everything from the line:
+#       if page == "Coaches View":
+#   all the way to the end of the file with this block.
+#
+# WHAT'S NEW:
+#   - Persistent Roster: register players once, reuse forever
+#   - Quick Game Entry: pick from roster dropdown, fill stats
+#   - Team Game Entry: bulk-enter a full game for all players at once
+#   - Dashboard: leaderboard, trends, win/loss record
+#   - AI Team Report: whole-roster analysis, not just one player
+#   - Player Comps & Depth Chart (unchanged logic, cleaner UI)
+# ============================================================
+
 if page == "Coaches View":
     if st.button("⬅ Back to Home"):
         st.session_state.page = "Home"
         st.rerun()
 
-    st.title("📋 Coaches View")
-    st.write("A team dashboard for coaches to enter roster stats, compare players, spot trends, and find pro-style player comps.")
+    # ── Header ──────────────────────────────────────────────
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+        border-radius: 16px;
+        padding: 28px 32px 20px 32px;
+        margin-bottom: 24px;
+    ">
+        <h1 style="color:#f0f9ff; margin:0; font-size:2rem; letter-spacing:-1px;">
+            📋 Coaches Dashboard
+        </h1>
+        <p style="color:#93c5fd; margin:6px 0 0 0; font-size:1rem;">
+            Build your roster once. Log every game in seconds. Let AI do the rest.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    COACH_TABLE_KEY = "coach_roster_games"
-    coach_cols = TABLES["coach_roster_games"]
-    
-    if "coach_roster_games" not in st.session_state:
-        st.session_state.coach_roster_games = load_from_db("coach_roster_games", coach_cols)
+    # ── Constants & DB keys ─────────────────────────────────
+    COACH_TABLE_KEY  = "coach_roster_games"
+    ROSTER_TABLE_KEY = "coach_roster_players"
+    coach_cols       = TABLES["coach_roster_games"]
 
+    ROSTER_COLUMNS = ["Player", "Sport", "Position", "Jersey", "Notes"]
+
+    SPORT_POSITIONS = {
+        "Basketball":        ["PG", "SG", "SF", "PF", "C", "G", "Wing", "F"],
+        "Baseball Hitting":  ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"],
+        "Baseball Pitching": ["SP", "RP", "CL"],
+        "Football":          ["QB", "RB", "FB", "WR", "TE",
+                              "OT", "OG", "C",
+                              "DE", "DT", "LB", "CB", "S", "K", "P"],
+    }
+
+    FB_SKILL  = {"QB"}
+    FB_RB     = {"RB", "FB"}
+    FB_WRTE   = {"WR", "TE"}
+    FB_LINE_O = {"OT", "OG", "C"}
+    FB_DEF    = {"DE", "DT", "LB", "CB", "S"}
+    FB_SPEC   = {"K", "P"}
+
+    def fb_stat_group(pos):
+        if pos in FB_SKILL:   return "QB"
+        if pos in FB_RB:      return "RB"
+        if pos in FB_WRTE:    return "WRTE"
+        if pos in FB_LINE_O:  return "OL"
+        if pos in FB_DEF:     return "DEF"
+        if pos in FB_SPEC:    return "SPEC"
+        return "DEF"
+
+    # ── Session state init ───────────────────────────────────
+    if COACH_TABLE_KEY not in st.session_state:
+        st.session_state[COACH_TABLE_KEY] = load_from_db(COACH_TABLE_KEY, coach_cols)
+
+    if ROSTER_TABLE_KEY not in st.session_state:
+        st.session_state[ROSTER_TABLE_KEY] = load_from_db(ROSTER_TABLE_KEY, ROSTER_COLUMNS)
+
+    # ── Helper: clean game df ────────────────────────────────
     def clean_coach_df(df):
         df = df.copy()
         for col in coach_cols:
@@ -2204,161 +2286,131 @@ if page == "Coaches View":
                 df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
         return df
 
-    def coach_summary(df, sport_filter="All"):
+    # ── Helper: roster lookup ────────────────────────────────
+    def get_roster_df():
+        df = st.session_state[ROSTER_TABLE_KEY].copy()
+        for col in ROSTER_COLUMNS:
+            if col not in df.columns:
+                df[col] = ""
+        return df[ROSTER_COLUMNS]
+
+    def roster_players_for_sport(sport_name):
+        df = get_roster_df()
+        if len(df) == 0:
+            return []
+        filtered = df[df["Sport"] == sport_name]["Player"].dropna().unique().tolist()
+        return sorted(filtered)
+
+    def get_player_position(player_name):
+        df = get_roster_df()
+        row = df[df["Player"] == player_name]
+        if len(row) == 0:
+            return ""
+        return str(row.iloc[0].get("Position", ""))
+
+    # ── Helper: coach summary ────────────────────────────────
+    def coach_summary(df):
         df = clean_coach_df(df)
-        if sport_filter != "All":
-            df = df[df["Sport"] == sport_filter]
         if len(df) == 0:
             return pd.DataFrame()
-
         rows = []
         for (sport_name, player, pos), g in df.groupby(["Sport", "Player", "Position"]):
             games = len(g)
-            row = {"Sport": sport_name, "Player": player, "Position": pos, "Games": games}
+            wins  = (g["Result"].str.upper() == "W").sum() if "Result" in g.columns else 0
+            losses= (g["Result"].str.upper() == "L").sum() if "Result" in g.columns else 0
+            row   = {"Sport": sport_name, "Player": player, "Position": pos,
+                     "Games": games, "W": int(wins), "L": int(losses)}
 
             if sport_name == "Basketball":
                 row.update({
                     "PTS/G": g["Points"].mean(), "REB/G": g["Rebounds"].mean(),
                     "AST/G": g["Assists"].mean(), "STL/G": g["Steals"].mean(),
-                    "BLK/G": g["Blocks"].mean(), "TOV/G": g["Turnovers"].mean(),
+                    "BLK/G": g["Blocks"].mean(),  "TOV/G": g["Turnovers"].mean(),
                     "Impact Score": (
-                        g["Points"].mean() + 1.2 * g["Rebounds"].mean()
-                        + 1.5 * g["Assists"].mean() + 2 * g["Steals"].mean()
-                        + 2 * g["Blocks"].mean() - g["Turnovers"].mean()
+                        g["Points"].mean() + 1.2*g["Rebounds"].mean()
+                        + 1.5*g["Assists"].mean() + 2*g["Steals"].mean()
+                        + 2*g["Blocks"].mean() - g["Turnovers"].mean()
                     )
                 })
             elif sport_name == "Baseball Hitting":
-                ab = g["At Bats"].sum()
-                hits = g["Hits"].sum()
-                walks = g["Walks"].sum()
-                doubles = g["Doubles"].sum()
-                triples = g["Triples"].sum()
-                hr = g["Home Runs"].sum()
+                ab = g["At Bats"].sum(); hits = g["Hits"].sum(); walks = g["Walks"].sum()
+                doubles = g["Doubles"].sum(); triples = g["Triples"].sum(); hr = g["Home Runs"].sum()
                 singles = max(hits - doubles - triples - hr, 0)
-                total_bases = singles + 2 * doubles + 3 * triples + 4 * hr
-                avg = hits / ab if ab > 0 else 0
-                obp = (hits + walks) / (ab + walks) if (ab + walks) > 0 else 0
-                slg = total_bases / ab if ab > 0 else 0
+                total_bases = singles + 2*doubles + 3*triples + 4*hr
+                avg = hits/ab if ab > 0 else 0
+                obp = (hits+walks)/(ab+walks) if (ab+walks) > 0 else 0
+                slg = total_bases/ab if ab > 0 else 0
                 row.update({
-                    "AVG": avg, "OBP": obp, "SLG": slg, "OPS": obp + slg,
+                    "AVG": avg, "OBP": obp, "SLG": slg, "OPS": obp+slg,
                     "HR": hr, "RBI": g["RBIs"].sum(), "SB": g["Stolen Bases"].sum(),
-                    "Impact Score": (
-                        (obp + slg) * 100 + 2 * hr
-                        + 0.5 * g["RBIs"].sum() + 0.75 * g["Stolen Bases"].sum()
-                    )
+                    "Impact Score": (obp+slg)*100 + 2*hr + 0.5*g["RBIs"].sum() + 0.75*g["Stolen Bases"].sum()
                 })
             elif sport_name == "Baseball Pitching":
-                ip = g["Innings Pitched"].sum()
-                er = g["Earned Runs"].sum()
-                k = g["Strikeouts"].sum()
-                bb = g["Walks"].sum()
-                ha = g["Hits Allowed"].sum()
-                era = er / ip * 9 if ip > 0 else 0
-                whip = (bb + ha) / ip if ip > 0 else 0
+                ip = g["Innings Pitched"].sum(); er = g["Earned Runs"].sum()
+                k  = g["Strikeouts"].sum();      bb = g["Walks"].sum(); ha = g["Hits Allowed"].sum()
+                era  = er/ip*9 if ip > 0 else 0
+                whip = (bb+ha)/ip if ip > 0 else 0
                 row.update({
                     "IP": ip, "ERA": era, "WHIP": whip,
-                    "K/9": k / ip * 9 if ip > 0 else 0,
-                    "BB/9": bb / ip * 9 if ip > 0 else 0,
-                    "Impact Score": (
-                        (k / ip * 9 if ip > 0 else 0) * 8 - era * 4 - whip * 10
-                    )
+                    "K/9": k/ip*9 if ip > 0 else 0,
+                    "BB/9": bb/ip*9 if ip > 0 else 0,
+                    "Impact Score": (k/ip*9 if ip > 0 else 0)*8 - era*4 - whip*10
                 })
             elif sport_name == "Football":
                 if pos == "QB":
                     row.update({
                         "Pass Yds/G": g["Passing Yards"].mean(),
-                        "Pass TD/G": g["Passing TDs"].mean(),
-                        "INT/G": g["Interceptions"].mean(),
+                        "Pass TD/G":  g["Passing TDs"].mean(),
+                        "INT/G":      g["Interceptions"].mean(),
                         "Rush Yds/G": g["Rushing Yards"].mean(),
-                        "Cmp %": (
-                            g["Completions"].sum() / g["Attempts"].sum() * 100
-                            if g["Attempts"].sum() > 0 else 0
-                        ),
+                        "Cmp %": g["Completions"].sum()/g["Attempts"].sum()*100 if g["Attempts"].sum() > 0 else 0,
                         "Impact Score": (
-                            g["Passing Yards"].mean() / 10
-                            + 6 * g["Passing TDs"].mean()
-                            - 4 * g["Interceptions"].mean()
-                            + g["Rushing Yards"].mean() / 10
-                            + 6 * g["Rushing TDs"].mean()
+                            g["Passing Yards"].mean()/10 + 6*g["Passing TDs"].mean()
+                            - 4*g["Interceptions"].mean() + g["Rushing Yards"].mean()/10
+                            + 6*g["Rushing TDs"].mean()
                         )
                     })
                 elif pos == "RB":
                     row.update({
                         "Rush Yds/G": g["Rushing Yards"].mean(),
-                        "Rush TD/G": g["Rushing TDs"].mean(),
-                        "Rec/G": g["Receptions"].mean(),
-                        "Rec Yds/G": g["Receiving Yards"].mean(),
+                        "Rush TD/G":  g["Rushing TDs"].mean(),
+                        "Rec/G":      g["Receptions"].mean(),
+                        "Rec Yds/G":  g["Receiving Yards"].mean(),
                         "Impact Score": (
-                            g["Rushing Yards"].mean() / 10
-                            + g["Receiving Yards"].mean() / 10
-                            + 6 * g["Rushing TDs"].mean()
-                            + 6 * g["Receiving TDs"].mean()
+                            g["Rushing Yards"].mean()/10 + g["Receiving Yards"].mean()/10
+                            + 6*g["Rushing TDs"].mean() + 6*g["Receiving TDs"].mean()
                         )
                     })
                 elif pos in ["WR", "TE", "WR/TE"]:
-                    catch_pct = (
-                        g["Receptions"].sum() / g["Targets"].sum() * 100
-                        if g["Targets"].sum() > 0 else 0
-                    )
+                    catch_pct = g["Receptions"].sum()/g["Targets"].sum()*100 if g["Targets"].sum() > 0 else 0
                     row.update({
-                        "Targets/G": g["Targets"].mean(),
-                        "Rec/G": g["Receptions"].mean(),
+                        "Targets/G": g["Targets"].mean(), "Rec/G": g["Receptions"].mean(),
                         "Rec Yds/G": g["Receiving Yards"].mean(),
-                        "Rec TD/G": g["Receiving TDs"].mean(),
-                        "Catch %": catch_pct,
-                        "Impact Score": (
-                            g["Receiving Yards"].mean() / 10
-                            + 6 * g["Receiving TDs"].mean()
-                            + catch_pct * 8
-                        )
+                        "Rec TD/G":  g["Receiving TDs"].mean(), "Catch %": catch_pct,
+                        "Impact Score": g["Receiving Yards"].mean()/10 + 6*g["Receiving TDs"].mean() + catch_pct*8
                     })
                 else:
                     row.update({
-                        "Tackles/G": g["Tackles"].mean(),
-                        "Sacks/G": g["Sacks"].mean(),
-                        "INT/G": g["Interceptions"].mean(),
-                        "PD/G": g["Passes Defended"].mean(),
-                        "FF/G": g["Forced Fumbles"].mean(),
+                        "Tackles/G": g["Tackles"].mean(), "Sacks/G": g["Sacks"].mean(),
+                        "INT/G":     g["Interceptions"].mean(), "PD/G": g["Passes Defended"].mean(),
+                        "FF/G":      g["Forced Fumbles"].mean(),
                         "Impact Score": (
-                            g["Tackles"].mean() + 4 * g["Sacks"].mean()
-                            + 5 * g["Interceptions"].mean()
-                            + 2 * g["Passes Defended"].mean()
-                            + 4 * g["Forced Fumbles"].mean()
+                            g["Tackles"].mean() + 4*g["Sacks"].mean()
+                            + 5*g["Interceptions"].mean() + 2*g["Passes Defended"].mean()
+                            + 4*g["Forced Fumbles"].mean()
                         )
                     })
             rows.append(row)
 
         out = pd.DataFrame(rows).fillna(0)
-        numeric_cols = out.select_dtypes(include="number").columns
-        out[numeric_cols] = out[numeric_cols].round(3)
+        num_cols = out.select_dtypes(include="number").columns
+        out[num_cols] = out[num_cols].round(3)
         return out.sort_values("Impact Score", ascending=False).reset_index(drop=True)
-
-    def get_impact_score_explanation(sport_name):
-        if sport_name == "Basketball":
-            return "**Basketball Impact Score** — `PTS/G + 1.2×REB/G + 1.5×AST/G + 2×STL/G + 2×BLK/G - TOV/G`"
-        elif sport_name == "Baseball Hitting":
-            return "**Baseball Hitting Impact Score** — `(OPS × 100) + 2×HR + 0.5×RBI + 0.75×SB`"
-        elif sport_name == "Baseball Pitching":
-            return "**Baseball Pitching Impact Score** — `(K/9 × 8) - (ERA × 4) - (WHIP × 10)`"
-        elif sport_name == "Football":
-            return (
-                "**Football Impact Score by position:** "
-                "QB: `Pass Yds/G÷10 + 6×Pass TD/G - 4×INT/G + Rush Yds/G÷10 + 6×Rush TD/G` | "
-                "RB: `Rush Yds/G÷10 + Rec Yds/G÷10 + 6×Rush TD/G + 6×Rec TD/G` | "
-                "WR/TE: `Rec Yds/G÷10 + 6×Rec TD/G + Catch%×8` | "
-                "Defense: `Tackles/G + 4×Sacks/G + 5×INT/G + 2×PD/G + 4×FF/G`"
-            )
-        return "Impact Score is a custom summary metric based on each sport's key stats."
-
-    def get_selected_player_profile(summary_df, player_name):
-        row = summary_df[summary_df["Player"] == player_name]
-        return None if len(row) == 0 else row.iloc[0]
 
     def find_coach_player_comp(profile, nba_season="2025-26", mlb_year=2025, nfl_season=2025):
         try:
             sport_name = profile["Sport"]
-            pos = profile["Position"]
-
+            pos        = profile["Position"]
             if sport_name == "Basketball":
                 pros = load_player_data(nba_season)
                 pros = pros[(pros["GP"] >= 20) & (pros["MIN"] >= 10)].copy()
@@ -2370,1041 +2422,486 @@ if page == "Coaches View":
                     ((pros["BLK"] - profile.get("BLK/G", 0)) / 1) ** 2 +
                     ((pros["TOV"] - profile.get("TOV/G", 0)) / 2) ** 2
                 ) ** 0.5
-                pros["Similarity Score"] = (1 / (1 + pros["DISTANCE"])).round(3)
+                pros["Similarity Score"] = (1/(1+pros["DISTANCE"])).round(3)
                 return pros.sort_values("DISTANCE").head(5)[
-                    ["PLAYER_NAME", "TEAM_ABBREVIATION", "PTS", "REB", "AST", "Similarity Score"]
-                ].rename(columns={"PLAYER_NAME": "Comp", "TEAM_ABBREVIATION": "Team"})
-
+                    ["PLAYER_NAME","TEAM_ABBREVIATION","PTS","REB","AST","Similarity Score"]
+                ].rename(columns={"PLAYER_NAME":"Comp","TEAM_ABBREVIATION":"Team"})
             if sport_name == "Baseball Hitting":
                 pros = load_mlb_batting_data(mlb_year).copy()
                 pros["DISTANCE"] = (
-                    ((pros["AVG"] - profile.get("AVG", 0)) / .035) ** 2 +
-                    ((pros["OBP"] - profile.get("OBP", 0)) / .045) ** 2 +
-                    ((pros["SLG"] - profile.get("SLG", 0)) / .070) ** 2 +
-                    ((pros["OPS"] - profile.get("OPS", 0)) / .100) ** 2
+                    ((pros["AVG"]-profile.get("AVG",0))/.035)**2 +
+                    ((pros["OBP"]-profile.get("OBP",0))/.045)**2 +
+                    ((pros["SLG"]-profile.get("SLG",0))/.070)**2 +
+                    ((pros["OPS"]-profile.get("OPS",0))/.100)**2
                 ) ** 0.5
-                pros["Similarity Score"] = (1 / (1 + pros["DISTANCE"])).round(3)
+                pros["Similarity Score"] = (1/(1+pros["DISTANCE"])).round(3)
                 return pros.sort_values("DISTANCE").head(5)[
-                    ["Name", "Team", "AVG", "OBP", "SLG", "OPS", "Similarity Score"]
-                ].rename(columns={"Name": "Comp"})
-
+                    ["Name","Team","AVG","OBP","SLG","OPS","Similarity Score"]
+                ].rename(columns={"Name":"Comp"})
             if sport_name == "Baseball Pitching":
                 pros = load_mlb_pitching_data(mlb_year).copy()
                 pros["DISTANCE"] = (
-                    ((pros["ERA"] - profile.get("ERA", 0)) / 1.0) ** 2 +
-                    ((pros["WHIP"] - profile.get("WHIP", 0)) / .25) ** 2 +
-                    ((pros["K_PER_9"] - profile.get("K/9", 0)) / 2.5) ** 2 +
-                    ((pros["BB_PER_9"] - profile.get("BB/9", 0)) / 1.5) ** 2
+                    ((pros["ERA"]-profile.get("ERA",0))/1.0)**2 +
+                    ((pros["WHIP"]-profile.get("WHIP",0))/.25)**2 +
+                    ((pros["K_PER_9"]-profile.get("K/9",0))/2.5)**2 +
+                    ((pros["BB_PER_9"]-profile.get("BB/9",0))/1.5)**2
                 ) ** 0.5
-                pros["Similarity Score"] = (1 / (1 + pros["DISTANCE"])).round(3)
+                pros["Similarity Score"] = (1/(1+pros["DISTANCE"])).round(3)
                 return pros.sort_values("DISTANCE").head(5)[
-                    ["Name", "Team", "ERA", "WHIP", "K_PER_9", "BB_PER_9", "Similarity Score"]
-                ].rename(columns={"Name": "Comp"})
-
+                    ["Name","Team","ERA","WHIP","K_PER_9","BB_PER_9","Similarity Score"]
+                ].rename(columns={"Name":"Comp"})
             if sport_name == "Football":
                 pros = load_nfl_player_data(nfl_season).copy()
                 if pos == "QB":
-                    pros = pros[pros["position"] == "QB"].copy()
+                    pros = pros[pros["position"]=="QB"].copy()
                     pros["DISTANCE"] = (
-                        ((pros["passing_yards"] / pros["games"] - profile.get("Pass Yds/G", 0)) / 45) ** 2 +
-                        ((pros["passing_tds"] / pros["games"] - profile.get("Pass TD/G", 0)) / .9) ** 2 +
-                        ((pros["passing_interceptions"] / pros["games"] - profile.get("INT/G", 0)) / .6) ** 2
+                        ((pros["passing_yards"]/pros["games"]-profile.get("Pass Yds/G",0))/45)**2 +
+                        ((pros["passing_tds"]/pros["games"]-profile.get("Pass TD/G",0))/.9)**2 +
+                        ((pros["passing_interceptions"]/pros["games"]-profile.get("INT/G",0))/.6)**2
                     ) ** 0.5
                 elif pos == "RB":
-                    pros = pros[pros["position"] == "RB"].copy()
+                    pros = pros[pros["position"]=="RB"].copy()
                     pros["DISTANCE"] = (
-                        ((pros["rushing_yards"] / pros["games"] - profile.get("Rush Yds/G", 0)) / 20) ** 2 +
-                        ((pros["rushing_tds"] / pros["games"] - profile.get("Rush TD/G", 0)) / .5) ** 2 +
-                        ((pros["receiving_yards"] / pros["games"] - profile.get("Rec Yds/G", 0)) / 18) ** 2
+                        ((pros["rushing_yards"]/pros["games"]-profile.get("Rush Yds/G",0))/20)**2 +
+                        ((pros["rushing_tds"]/pros["games"]-profile.get("Rush TD/G",0))/.5)**2 +
+                        ((pros["receiving_yards"]/pros["games"]-profile.get("Rec Yds/G",0))/18)**2
                     ) ** 0.5
-                elif pos in ["WR", "TE", "WR/TE"]:
-                    pros = pros[pros["position"].isin(["WR", "TE"])].copy()
+                elif pos in ["WR","TE","WR/TE"]:
+                    pros = pros[pros["position"].isin(["WR","TE"])].copy()
                     pros["DISTANCE"] = (
-                        ((pros["targets"] / pros["games"] - profile.get("Targets/G", 0)) / 2.5) ** 2 +
-                        ((pros["receptions"] / pros["games"] - profile.get("Rec/G", 0)) / 2) ** 2 +
-                        ((pros["receiving_yards"] / pros["games"] - profile.get("Rec Yds/G", 0)) / 20) ** 2
+                        ((pros["targets"]/pros["games"]-profile.get("Targets/G",0))/2.5)**2 +
+                        ((pros["receptions"]/pros["games"]-profile.get("Rec/G",0))/2)**2 +
+                        ((pros["receiving_yards"]/pros["games"]-profile.get("Rec Yds/G",0))/20)**2
                     ) ** 0.5
                 else:
-                    pros = pros[pros["position"].isin([
-                        "LB", "ILB", "OLB", "MLB", "CB", "S", "SS", "FS",
-                        "DB", "DE", "DT", "DL", "EDGE", "SAF", "NT"
-                    ])].copy()
+                    pros = pros[pros["position"].isin(["LB","ILB","OLB","MLB","CB","S","SS","FS","DB","DE","DT","DL","EDGE","SAF","NT"])].copy()
                     pros["DISTANCE"] = (
-                        ((pros["def_tackles_solo"] / pros["games"] - profile.get("Tackles/G", 0)) / 2.5) ** 2 +
-                        ((pros["def_sacks"] / pros["games"] - profile.get("Sacks/G", 0)) / .5) ** 2 +
-                        ((pros["def_interceptions"] / pros["games"] - profile.get("INT/G", 0)) / .3) ** 2
+                        ((pros["def_tackles_solo"]/pros["games"]-profile.get("Tackles/G",0))/2.5)**2 +
+                        ((pros["def_sacks"]/pros["games"]-profile.get("Sacks/G",0))/.5)**2 +
+                        ((pros["def_interceptions"]/pros["games"]-profile.get("INT/G",0))/.3)**2
                     ) ** 0.5
-                pros = pros[pros["games"] > 0].copy()
-                pros["Similarity Score"] = (1 / (1 + pros["DISTANCE"])).round(3)
+                pros = pros[pros["games"]>0].copy()
+                pros["Similarity Score"] = (1/(1+pros["DISTANCE"])).round(3)
                 return pros.sort_values("DISTANCE").head(5)[
-                    ["player_name", "team", "position", "games", "Similarity Score"]
-                ].rename(columns={"player_name": "Comp", "team": "Team", "position": "Position"})
-
+                    ["player_name","team","position","games","Similarity Score"]
+                ].rename(columns={"player_name":"Comp","team":"Team","position":"Position"})
         except Exception as e:
-            st.warning(f"Could not load pro comps right now: {e}")
+            st.warning(f"Could not load pro comps: {e}")
         return pd.DataFrame()
 
-    # -----------------------------------------------------------------------
-    # SPORT / POSITION CONFIG — single source of truth
-    # -----------------------------------------------------------------------
-
-    SPORT_POSITIONS = {
-        "Basketball":        ["PG", "SG", "SF", "PF", "C", "G", "Wing", "F"],
-        "Baseball Hitting":  ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"],
-        "Baseball Pitching": ["SP", "RP", "CL"],
-        "Football":          ["QB", "RB", "FB", "WR", "TE",
-                              "OT", "OG", "C",
-                              "DE", "DT", "LB", "CB", "S", "K", "P"],
-    }
-
-    # Football positions grouped by stat profile they share
-    FB_SKILL   = {"QB"}
-    FB_RB      = {"RB", "FB"}
-    FB_WRTE    = {"WR", "TE"}
-    FB_LINE_O  = {"OT", "OG", "C"}      # offensive line — no tracked stats, generic note
-    FB_DEF     = {"DE", "DT", "LB", "CB", "S"}
-    FB_SPEC    = {"K", "P"}             # kickers/punters — minimal stats
-
-    def fb_stat_group(pos):
-        if pos in FB_SKILL:   return "QB"
-        if pos in FB_RB:      return "RB"
-        if pos in FB_WRTE:    return "WRTE"
-        if pos in FB_LINE_O:  return "OL"
-        if pos in FB_DEF:     return "DEF"
-        if pos in FB_SPEC:    return "SPEC"
-        return "DEF"
-
-    # -----------------------------------------------------------------------
-    # TABS
-    # -----------------------------------------------------------------------
-    
-    single_entry_tab, team_entry_tab, dashboard_tab, comps_tab, depth_chart_tab = st.tabs([
-    "➕ Single Player Entry",
-    "👥 Team Game Entry",
-    "📊 Team Dashboard",
-    "🧬 Player Comps",
-    "🧩 Depth Chart",
+    # ── TABS ─────────────────────────────────────────────────
+    roster_tab, log_tab, dashboard_tab, comps_tab, depth_tab = st.tabs([
+        "👥 Roster",
+        "➕ Log Game",
+        "📊 Dashboard",
+        "🧬 Comps",
+        "🧩 Depth Chart",
     ])
 
-    # ===================================================================
-    # ROSTER TAB
-    # ===================================================================
-    with single_entry_tab:
-        st.subheader("Add a Roster Game")
-        st.caption("Log one player's performance per submission.")
+    # ════════════════════════════════════════════════════════
+    # TAB 1 — ROSTER BUILDER
+    # ════════════════════════════════════════════════════════
+    with roster_tab:
+        st.subheader("Your Roster")
+        st.caption("Add players here once. They'll appear as dropdowns everywhere else.")
 
-        # --- Sport selector OUTSIDE the form so position list reacts ---
-        c_sport = st.selectbox(
-            "Sport",
-            list(SPORT_POSITIONS.keys()),
-            key="coach_sport_outer",
-        )
+        roster_df = get_roster_df()
 
-        pos_options = SPORT_POSITIONS[c_sport]
+        # ── Add player form ──────────────────────────────────
+        with st.expander("➕ Add a New Player", expanded=len(roster_df) == 0):
+            with st.form("add_roster_player"):
+                rc1, rc2, rc3, rc4 = st.columns(4)
+                with rc1:
+                    r_name    = st.text_input("Player Name")
+                with rc2:
+                    r_sport   = st.selectbox("Sport", list(SPORT_POSITIONS.keys()))
+                with rc3:
+                    r_pos     = st.selectbox("Position", SPORT_POSITIONS[list(SPORT_POSITIONS.keys())[0]])
+                with rc4:
+                    r_jersey  = st.text_input("Jersey #", value="")
+                r_notes = st.text_input("Notes (optional)", placeholder="e.g. Captain, injured left knee")
 
-        c_position = st.selectbox(
-            "Position",
-            pos_options,
-            key="coach_position_outer",
-        )
+                if st.form_submit_button("Add to Roster"):
+                    # Update position options based on selected sport
+                    if r_name.strip() == "":
+                        st.error("Enter a player name.")
+                    else:
+                        new_player = pd.DataFrame([{
+                            "Player": r_name.strip(),
+                            "Sport":  r_sport,
+                            "Position": r_pos,
+                            "Jersey": r_jersey,
+                            "Notes":  r_notes,
+                        }])
+                        existing = get_roster_df()
+                        # Avoid exact duplicates
+                        if ((existing["Player"] == r_name.strip()) & (existing["Sport"] == r_sport)).any():
+                            st.warning(f"{r_name} is already on the {r_sport} roster.")
+                        else:
+                            st.session_state[ROSTER_TABLE_KEY] = pd.concat(
+                                [existing, new_player], ignore_index=True
+                            )
+                            save_to_db(ROSTER_TABLE_KEY, st.session_state[ROSTER_TABLE_KEY])
+                            st.success(f"Added {r_name} to roster.")
+                            st.rerun()
 
-        # Determine which stat block to show for football
-        fb_group = fb_stat_group(c_position) if c_sport == "Football" else None
+        # ── Roster table ─────────────────────────────────────
+        roster_df = get_roster_df()
+        if len(roster_df) == 0:
+            st.info("No players yet. Add your first player above.")
+        else:
+            # Show by sport
+            for sport_name, group in roster_df.groupby("Sport"):
+                st.markdown(f"#### {sport_name} — {len(group)} player{'s' if len(group)!=1 else ''}")
 
-        # Show a small note for positions we don't track detailed stats for
-        if c_sport == "Football" and fb_group in ("OL", "SPEC"):
-            st.info(
-                f"{'Offensive linemen' if fb_group == 'OL' else 'Kickers/Punters'} don't have "
-                "per-game skill stats tracked in this system. You can still log the game and "
-                "use the player for roster/depth-chart purposes."
-            )
-
-        # --- Rest of the form ---
-        with st.form("coach_roster_form"):
-
-            fi1, fi2, fi3, fi4 = st.columns(4)
-            with fi1:
-                c_player = st.text_input("Player Name", key="coach_player_name")
-            with fi2:
-                c_opp = st.text_input("Opponent", key="coach_opp")
-            with fi3:
-                c_date = st.date_input("Game Date", key="coach_date")
-            with fi4:
-                c_result = st.selectbox("Result", ["", "W", "L", "ND"], key="coach_result")
-
-            fs1, fs2 = st.columns(2)
-            with fs1:
-                c_team_score = st.number_input("Team Score", min_value=0, step=1, key="coach_team_score")
-            with fs2:
-                c_opp_score = st.number_input("Opponent Score", min_value=0, step=1, key="coach_opp_score")
-
-            # Base row — all stat columns zeroed
-            new_row = {col: 0 for col in coach_cols}
-            new_row.update({
-                "Sport": c_sport,
-                "Player": c_player,
-                "Position": c_position,
-                "Date": pd.to_datetime(c_date),
-                "Opponent": c_opp,
-                "Team Score": c_team_score,
-                "Opponent Score": c_opp_score,
-                "Result": c_result,
-            })
+                # Styled roster cards
+                cols = st.columns(min(4, len(group)))
+                for i, (_, p) in enumerate(group.reset_index(drop=True).iterrows()):
+                    with cols[i % len(cols)]:
+                        jersey_display = f"#{p['Jersey']}" if str(p.get("Jersey","")).strip() else ""
+                        notes_display  = f"<br><small style='color:#888;'>{p['Notes']}</small>" if str(p.get("Notes","")).strip() else ""
+                        st.markdown(f"""
+                        <div style="
+                            border:1px solid #e2e8f0;
+                            border-radius:12px;
+                            padding:12px 14px;
+                            margin-bottom:8px;
+                            background:#f8fafc;
+                        ">
+                            <b style="font-size:15px;">{p['Player']}</b>
+                            <span style="float:right;color:#64748b;font-size:13px;">{jersey_display}</span><br>
+                            <span style="
+                                background:#dbeafe;color:#1d4ed8;
+                                border-radius:6px;padding:2px 8px;
+                                font-size:12px;font-weight:600;
+                            ">{p['Position']}</span>
+                            {notes_display}
+                        </div>
+                        """, unsafe_allow_html=True)
 
             st.markdown("---")
+            st.subheader("Edit or Remove Players")
 
-            # ---- BASKETBALL ------------------------------------------------
-            if c_sport == "Basketball":
-                st.markdown("**Counting Stats**")
-                b1, b2, b3 = st.columns(3)
-                with b1:
-                    new_row["Points"]    = st.number_input("Points",    min_value=0, step=1, key="c_pts")
-                    new_row["Rebounds"]  = st.number_input("Rebounds",  min_value=0, step=1, key="c_reb")
-                with b2:
-                    new_row["Assists"]   = st.number_input("Assists",   min_value=0, step=1, key="c_ast")
-                    new_row["Steals"]    = st.number_input("Steals",    min_value=0, step=1, key="c_stl")
-                with b3:
-                    new_row["Blocks"]    = st.number_input("Blocks",    min_value=0, step=1, key="c_blk")
-                    new_row["Turnovers"] = st.number_input("Turnovers", min_value=0, step=1, key="c_tov")
-
-            # ---- BASEBALL HITTING ------------------------------------------
-            elif c_sport == "Baseball Hitting":
-                st.markdown("**Hitting Stats**")
-                h1, h2, h3, h4 = st.columns(4)
-                with h1:
-                    new_row["At Bats"]  = st.number_input("At Bats",  min_value=0, step=1, key="c_ab")
-                    new_row["Hits"]     = st.number_input("Hits",     min_value=0, step=1, key="c_hits")
-                with h2:
-                    new_row["Runs"]     = st.number_input("Runs",     min_value=0, step=1, key="c_runs")
-                    new_row["RBIs"]     = st.number_input("RBIs",     min_value=0, step=1, key="c_rbis")
-                with h3:
-                    new_row["Walks"]      = st.number_input("Walks",      min_value=0, step=1, key="c_walks")
-                    new_row["Strikeouts"] = st.number_input("Strikeouts", min_value=0, step=1, key="c_ks_hit")
-                with h4:
-                    new_row["Doubles"]      = st.number_input("Doubles",      min_value=0, step=1, key="c_2b")
-                    new_row["Triples"]      = st.number_input("Triples",      min_value=0, step=1, key="c_3b")
-                    new_row["Home Runs"]    = st.number_input("Home Runs",    min_value=0, step=1, key="c_hr")
-                    new_row["Stolen Bases"] = st.number_input("Stolen Bases", min_value=0, step=1, key="c_sb")
-
-            # ---- BASEBALL PITCHING -----------------------------------------
-            elif c_sport == "Baseball Pitching":
-                st.markdown("**Pitching Stats**")
-                p1, p2, p3, p4 = st.columns(4)
-                with p1:
-                    new_row["Innings Pitched"] = st.number_input("Innings Pitched", min_value=0.0, step=0.1, format="%.1f", key="c_ip")
-                    new_row["Strikeouts"]      = st.number_input("Strikeouts",      min_value=0, step=1, key="c_k_p")
-                with p2:
-                    new_row["Walks"]       = st.number_input("Walks",        min_value=0, step=1, key="c_bb_p")
-                    new_row["Hits Allowed"] = st.number_input("Hits Allowed", min_value=0, step=1, key="c_ha")
-                with p3:
-                    new_row["Earned Runs"]       = st.number_input("Earned Runs",       min_value=0, step=1, key="c_er")
-                    new_row["Home Runs Allowed"] = st.number_input("Home Runs Allowed", min_value=0, step=1, key="c_hra")
-                with p4:
-                    new_row["Pitches Thrown"] = st.number_input("Pitches Thrown", min_value=0, step=1, key="c_pitches")
-
-            # ---- FOOTBALL --------------------------------------------------
-            elif c_sport == "Football":
-
-                if fb_group == "QB":
-                    st.markdown("**QB Stats**")
-                    f1, f2, f3 = st.columns(3)
-                    with f1:
-                        new_row["Completions"] = st.number_input("Completions", min_value=0, step=1, key="c_cmp")
-                        new_row["Attempts"]    = st.number_input("Attempts",    min_value=0, step=1, key="c_att")
-                    with f2:
-                        new_row["Passing Yards"] = st.number_input("Passing Yards", min_value=0, step=1, key="c_pass_yds")
-                        new_row["Passing TDs"]   = st.number_input("Passing TDs",   min_value=0, step=1, key="c_pass_td")
-                        new_row["Interceptions"] = st.number_input("Interceptions", min_value=0, step=1, key="c_int_qb")
-                    with f3:
-                        new_row["Rushing Yards"] = st.number_input("Rushing Yards", min_value=0, step=1, key="c_qb_rush")
-                        new_row["Rushing TDs"]   = st.number_input("Rushing TDs",   min_value=0, step=1, key="c_qb_rtd")
-
-                elif fb_group == "RB":
-                    st.markdown("**RB / FB Stats**")
-                    f1, f2, f3 = st.columns(3)
-                    with f1:
-                        new_row["Carries"]      = st.number_input("Carries",      min_value=0, step=1, key="c_car")
-                        new_row["Rushing Yards"] = st.number_input("Rushing Yards", min_value=0, step=1, key="c_rb_rush")
-                    with f2:
-                        new_row["Rushing TDs"]  = st.number_input("Rushing TDs",  min_value=0, step=1, key="c_rb_rtd")
-                        new_row["Receptions"]   = st.number_input("Receptions",   min_value=0, step=1, key="c_rb_rec")
-                    with f3:
-                        new_row["Receiving Yards"] = st.number_input("Receiving Yards", min_value=0, step=1, key="c_rb_ryds")
-                        new_row["Receiving TDs"]   = st.number_input("Receiving TDs",   min_value=0, step=1, key="c_rb_rtds")
-
-                elif fb_group == "WRTE":
-                    st.markdown(f"**{c_position} Stats**")
-                    f1, f2, f3 = st.columns(3)
-                    with f1:
-                        new_row["Targets"]    = st.number_input("Targets",    min_value=0, step=1, key="c_tgt")
-                        new_row["Receptions"] = st.number_input("Receptions", min_value=0, step=1, key="c_wr_rec")
-                    with f2:
-                        new_row["Receiving Yards"] = st.number_input("Receiving Yards", min_value=0, step=1, key="c_wr_yds")
-                        new_row["Receiving TDs"]   = st.number_input("Receiving TDs",   min_value=0, step=1, key="c_wr_td")
-                    with f3:
-                        new_row["Rushing Yards"] = st.number_input("Rushing Yards", min_value=0, step=1, key="c_wr_rush")
-                        new_row["Rushing TDs"]   = st.number_input("Rushing TDs",   min_value=0, step=1, key="c_wr_rtd")
-
-                elif fb_group == "DEF":
-                    st.markdown(f"**{c_position} Defensive Stats**")
-                    f1, f2, f3 = st.columns(3)
-                    with f1:
-                        new_row["Tackles"]   = st.number_input("Tackles",   min_value=0,   step=1,   key="c_tackles")
-                        new_row["Assists_FB"] = st.number_input("Assists",   min_value=0,   step=1,   key="c_assists_fb")
-                    with f2:
-                        new_row["Sacks"]         = st.number_input("Sacks",         min_value=0.0, step=0.5, key="c_sacks")
-                        new_row["Interceptions"] = st.number_input("Interceptions", min_value=0,   step=1,   key="c_def_int")
-                    with f3:
-                        new_row["Passes Defended"]   = st.number_input("Passes Defended",   min_value=0, step=1, key="c_pd")
-                        new_row["Forced Fumbles"]    = st.number_input("Forced Fumbles",    min_value=0, step=1, key="c_ff")
-                        new_row["Fumble Recoveries"] = st.number_input("Fumble Recoveries", min_value=0, step=1, key="c_fr")
-
-                elif fb_group == "OL":
-                    st.info("No per-game skill stats are tracked for offensive linemen.")
-
-                elif fb_group == "SPEC":
-                    st.markdown(f"**{c_position} Stats**")
-                    new_row["Pitches Thrown"] = 0   # placeholder so row still saves cleanly
-                    st.info("Kicker / Punter detailed stats are not tracked yet. The game will still be logged.")
-
-            submitted = st.form_submit_button("Add Player Game to Roster")
-            if submitted:
-                error = False
-                if not c_player.strip() or not c_opp.strip():
-                    st.error("Please enter both a player name and an opponent.")
-                    error = True
-                elif c_sport == "Baseball Hitting" and new_row["Hits"] > new_row["At Bats"]:
-                    st.error("Hits cannot exceed At Bats.")
-                    error = True
-                elif c_sport == "Football" and fb_group == "QB" and new_row["Completions"] > new_row["Attempts"]:
-                    st.error("Completions cannot exceed Attempts.")
-                    error = True
-                elif c_sport == "Football" and fb_group == "WRTE" and new_row["Receptions"] > new_row["Targets"]:
-                    st.error("Receptions cannot exceed Targets.")
-                    error = True
-
-                if not error:
-                    st.session_state.coach_roster_games = pd.concat(
-                        [st.session_state.coach_roster_games, pd.DataFrame([new_row])],
-                        ignore_index=True,
-                    )
-                    save_to_db("coach_roster_games", st.session_state.coach_roster_games)
-                    st.success(f"✅ Added game for {c_player}.")
-
-        # --- Raw game log ---
-        st.subheader("Raw Roster Game Log")
-        coach_df = clean_coach_df(st.session_state.coach_roster_games)
-
-        if len(coach_df) == 0:
-            st.info("No roster games logged yet.")
-        else:
-            log_sport_filter = st.selectbox(
-                "View game log for sport",
-                sorted(coach_df["Sport"].dropna().unique().tolist()),
-                key="coach_log_sport_filter",
-            )
-            display_log = coach_df[coach_df["Sport"] == log_sport_filter].copy()
-            display_log["Date"] = display_log["Date"].dt.strftime("%Y-%m-%d")
-
-            base_cols = ["Sport", "Player", "Position", "Date", "Opponent",
-                         "Team Score", "Opponent Score", "Result"]
-
-            sport_stat_cols = {
-                "Basketball":        ["Points", "Rebounds", "Assists", "Steals", "Blocks", "Turnovers"],
-                "Baseball Hitting":  ["At Bats", "Hits", "Runs", "RBIs", "Walks", "Strikeouts",
-                                      "Doubles", "Triples", "Home Runs", "Stolen Bases"],
-                "Baseball Pitching": ["Innings Pitched", "Strikeouts", "Walks", "Hits Allowed",
-                                      "Earned Runs", "Home Runs Allowed", "Pitches Thrown"],
-                "Football":          ["Completions", "Attempts", "Passing Yards", "Passing TDs",
-                                      "Interceptions", "Carries", "Rushing Yards", "Rushing TDs",
-                                      "Targets", "Receptions", "Receiving Yards", "Receiving TDs",
-                                      "Tackles", "Assists_FB", "Sacks", "Passes Defended",
-                                      "Forced Fumbles", "Fumble Recoveries"],
-            }
-
-            visible_cols = [c for c in base_cols + sport_stat_cols.get(log_sport_filter, [])
-                            if c in display_log.columns]
-
-            st.dataframe(
-                display_log[visible_cols].sort_values(["Date", "Player"], ascending=[False, True]),
-                use_container_width=True,
-                hide_index=True,
-            )
-
-            csv = display_log[visible_cols].to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "⬇️ Download Game Log CSV",
-                data=csv,
-                file_name=f"{log_sport_filter.lower().replace(' ', '_')}_roster_log.csv",
-                mime="text/csv",
-            )
-
-            delete_labels = (
-                display_log.index.astype(str) + " | "
-                + display_log["Date"].astype(str) + " | "
-                + display_log["Player"] + " vs " + display_log["Opponent"]
-                + " | " + display_log["Sport"]
-            )
-            del_choice = st.selectbox(
-                "Delete a roster game",
-                options=display_log.index,
-                format_func=lambda i: delete_labels.loc[i],
-                key="coach_delete_game",
-            )
-            if st.button("Delete Selected Roster Game"):
-                st.session_state.coach_roster_games = (
-                    st.session_state.coach_roster_games
-                    .drop(st.session_state.coach_roster_games.index[del_choice])
-                    .reset_index(drop=True)
-                )
-                save_to_db("coach_roster_games", st.session_state.coach_roster_games)
-                st.success("Roster game deleted.")
-                st.rerun()
-
-
-    with team_entry_tab:
-        st.subheader("👥 Team Game Entry")
-        st.caption("Enter one game's info once, then fill in stats for multiple players at the same time.")
-
-        if "team_game_save_confirmation" in st.session_state:
-            conf = st.session_state.pop("team_game_save_confirmation")
-            st.success(
-                f"✅ Saved {conf['count']} player stat lines for "
-                f"{conf['sport']} vs {conf['opponent']} on {conf['date']}."
-            )
-    
-        # =====================================================
-        # GAME INFO
-        # =====================================================
-    
-        team_sport = st.selectbox(
-            "Sport",
-            ["Basketball", "Baseball", "Football"],
-            key="team_entry_sport"
-        )
-    
-        gi1, gi2, gi3, gi4 = st.columns(4)
-    
-        with gi1:
-            team_date = st.date_input("Game Date", key="team_entry_date")
-    
-        with gi2:
-            team_opp = st.text_input("Opponent", key="team_entry_opp")
-    
-        with gi3:
-            team_result = st.selectbox(
-                "Result",
-                ["", "W", "L", "T", "ND"],
-                key="team_entry_result"
-            )
-    
-        with gi4:
-            num_players = st.number_input(
-                "Rows Per Table",
-                min_value=1,
-                max_value=40,
-                value=5,
-                step=1
-            )
-    
-        gs1, gs2 = st.columns(2)
-    
-        with gs1:
-            team_score = st.number_input(
-                "Team Score",
-                min_value=0,
-                step=1,
-                key="team_entry_score"
-            )
-    
-        with gs2:
-            opp_score = st.number_input(
-                "Opponent Score",
-                min_value=0,
-                step=1,
-                key="team_entry_opp_score"
-            )
-    
-        # =====================================================
-        # HELPERS
-        # =====================================================
-    
-        def make_editor_df(columns, rows=num_players):
-            df = pd.DataFrame([{c: 0 for c in columns} for _ in range(rows)])
-    
-            if "Player" in df.columns:
-                df["Player"] = ""
-    
-            return df
-    
-        def process_editor_rows(editor_df, sport_name):
-            rows = []
-    
-            for _, row in editor_df.iterrows():
-    
-                player_name = str(row.get("Player", "")).strip()
-    
-                if player_name == "":
-                    continue
-    
-                new_row = {col: 0 for col in coach_cols}
-    
-                new_row.update({
-                    "Sport": sport_name,
-                    "Player": player_name,
-                    "Position": row.get("Position", ""),
-                    "Date": pd.to_datetime(team_date),
-                    "Opponent": team_opp,
-                    "Team Score": team_score,
-                    "Opponent Score": opp_score,
-                    "Result": team_result,
-                })
-    
-                for col in editor_df.columns:
-    
-                    if col in [
-                        "Player",
-                        "Position"
-                    ]:
-                        continue
-    
-                    val = pd.to_numeric(row[col], errors="coerce")
-    
-                    if pd.isna(val):
-                        val = 0
-    
-                    new_row[col] = val
-    
-                rows.append(new_row)
-    
-            return rows
-    
-        # =====================================================
-        # BASKETBALL
-        # =====================================================
-    
-        all_rows_to_add = []
-    
-        if team_sport == "Basketball":
-    
-            st.markdown("### Basketball Team Stats")
-    
-            basketball_cols = [
-                "Player",
-                "Position",
-                "Points",
-                "Rebounds",
-                "Assists",
-                "Steals",
-                "Blocks",
-                "Turnovers"
-            ]
-    
-            basketball_df = make_editor_df(basketball_cols)
-    
-            basketball_df["Position"] = SPORT_POSITIONS["Basketball"][0]
-    
-            basketball_editor = st.data_editor(
-                basketball_df,
+            editable = roster_df.copy()
+            edited_roster = st.data_editor(
+                editable,
                 use_container_width=True,
                 hide_index=True,
                 num_rows="dynamic",
-                column_config={
-                    "Position": st.column_config.SelectboxColumn(
-                        "Position",
-                        options=SPORT_POSITIONS["Basketball"],
-                        required=True
-                    )
-                },
-                key="basketball_team_editor"
+                key="roster_editor",
             )
-    
-            all_rows_to_add.extend(
-                process_editor_rows(basketball_editor, "Basketball")
-            )
-    
-        # =====================================================
-        # BASEBALL
-        # =====================================================
-    
-        elif team_sport == "Baseball":
-    
-            hitting_tab, pitching_tab = st.tabs([
-                "⚾ Hitters",
-                "🔥 Pitchers"
-            ])
-    
-            # ----------------------------
-            # HITTING
-            # ----------------------------
-    
-            with hitting_tab:
-    
-                st.markdown("### Hitting Stats")
-    
-                hitting_cols = [
-                    "Player",
-                    "Position",
-                    "At Bats",
-                    "Hits",
-                    "Runs",
-                    "RBIs",
-                    "Walks",
-                    "Strikeouts",
-                    "Doubles",
-                    "Triples",
-                    "Home Runs",
-                    "Stolen Bases"
-                ]
-    
-                hitting_df = make_editor_df(hitting_cols)
-    
-                hitting_df["Position"] = SPORT_POSITIONS["Baseball Hitting"][0]
-    
-                hitting_editor = st.data_editor(
-                    hitting_df,
-                    use_container_width=True,
-                    hide_index=True,
-                    num_rows="dynamic",
-                    column_config={
-                        "Position": st.column_config.SelectboxColumn(
-                            "Position",
-                            options=SPORT_POSITIONS["Baseball Hitting"],
-                            required=True
-                        )
-                    },
-                    key="baseball_hitting_editor"
-                )
-    
-            # ----------------------------
-            # PITCHING
-            # ----------------------------
-    
-            with pitching_tab:
-    
-                st.markdown("### Pitching Stats")
-    
-                pitching_cols = [
-                    "Player",
-                    "Position",
-                    "Innings Pitched",
-                    "Strikeouts",
-                    "Walks",
-                    "Hits Allowed",
-                    "Earned Runs",
-                    "Home Runs Allowed",
-                    "Pitches Thrown"
-                ]
-    
-                pitching_df = make_editor_df(pitching_cols)
-    
-                pitching_df["Position"] = SPORT_POSITIONS["Baseball Pitching"][0]
-    
-                pitching_editor = st.data_editor(
-                    pitching_df,
-                    use_container_width=True,
-                    hide_index=True,
-                    num_rows="dynamic",
-                    column_config={
-                        "Position": st.column_config.SelectboxColumn(
-                            "Position",
-                            options=SPORT_POSITIONS["Baseball Pitching"],
-                            required=True
-                        )
-                    },
-                    key="baseball_pitching_editor"
-                )
-    
-            all_rows_to_add.extend(
-                process_editor_rows(hitting_editor, "Baseball Hitting")
-            )
-    
-            all_rows_to_add.extend(
-                process_editor_rows(pitching_editor, "Baseball Pitching")
-            )
-    
-        # =====================================================
-        # FOOTBALL
-        # =====================================================
-    
-        elif team_sport == "Football":
-    
-            qb_tab, rb_tab, wr_tab, defense_tab = st.tabs([
-                "🏈 QB",
-                "💨 RB/FB",
-                "🎯 WR/TE",
-                "🛡 Defense"
-            ])
-    
-            # ----------------------------
-            # QB
-            # ----------------------------
-    
-            with qb_tab:
-    
-                qb_cols = [
-                    "Player",
-                    "Position",
-                    "Completions",
-                    "Attempts",
-                    "Passing Yards",
-                    "Passing TDs",
-                    "Interceptions",
-                    "Rushing Yards",
-                    "Rushing TDs"
-                ]
-    
-                qb_df = make_editor_df(qb_cols)
-    
-                qb_df["Position"] = "QB"
-    
-                qb_editor = st.data_editor(
-                    qb_df,
-                    use_container_width=True,
-                    hide_index=True,
-                    num_rows="dynamic",
-                    column_config={
-                        "Position": st.column_config.SelectboxColumn(
-                            "Position",
-                            options=["QB"],
-                            required=True
-                        )
-                    },
-                    key="football_qb_editor"
-                )
-    
-            # ----------------------------
-            # RB
-            # ----------------------------
-    
-            with rb_tab:
-    
-                rb_cols = [
-                    "Player",
-                    "Position",
-                    "Carries",
-                    "Rushing Yards",
-                    "Rushing TDs",
-                    "Receptions",
-                    "Receiving Yards",
-                    "Receiving TDs"
-                ]
-    
-                rb_df = make_editor_df(rb_cols)
-    
-                rb_df["Position"] = "RB"
-    
-                rb_editor = st.data_editor(
-                    rb_df,
-                    use_container_width=True,
-                    hide_index=True,
-                    num_rows="dynamic",
-                    column_config={
-                        "Position": st.column_config.SelectboxColumn(
-                            "Position",
-                            options=["RB", "FB"],
-                            required=True
-                        )
-                    },
-                    key="football_rb_editor"
-                )
-    
-            # ----------------------------
-            # WR/TE
-            # ----------------------------
-    
-            with wr_tab:
-    
-                wr_cols = [
-                    "Player",
-                    "Position",
-                    "Targets",
-                    "Receptions",
-                    "Receiving Yards",
-                    "Receiving TDs",
-                    "Rushing Yards",
-                    "Rushing TDs"
-                ]
-    
-                wr_df = make_editor_df(wr_cols)
-    
-                wr_df["Position"] = "WR"
-    
-                wr_editor = st.data_editor(
-                    wr_df,
-                    use_container_width=True,
-                    hide_index=True,
-                    num_rows="dynamic",
-                    column_config={
-                        "Position": st.column_config.SelectboxColumn(
-                            "Position",
-                            options=["WR", "TE"],
-                            required=True
-                        )
-                    },
-                    key="football_wr_editor"
-                )
-    
-            # ----------------------------
-            # DEFENSE
-            # ----------------------------
-    
-            with defense_tab:
-    
-                defense_cols = [
-                    "Player",
-                    "Position",
-                    "Tackles",
-                    "Assists_FB",
-                    "Sacks",
-                    "Interceptions",
-                    "Passes Defended",
-                    "Forced Fumbles",
-                    "Fumble Recoveries"
-                ]
-    
-                defense_df = make_editor_df(defense_cols)
-    
-                defense_df["Position"] = "LB"
-    
-                defense_editor = st.data_editor(
-                    defense_df,
-                    use_container_width=True,
-                    hide_index=True,
-                    num_rows="dynamic",
-                    column_config={
-                        "Position": st.column_config.SelectboxColumn(
-                            "Position",
-                            options=[p for p in SPORT_POSITIONS["Football"] if p in ["DE", "DT", "LB", "CB", "S"]],
-                            required=True
-                        )
-                    },
-                    key="football_defense_editor"
-                )
-    
-            all_rows_to_add.extend(
-                process_editor_rows(qb_editor, "Football")
-            )
-    
-            all_rows_to_add.extend(
-                process_editor_rows(rb_editor, "Football")
-            )
-    
-            all_rows_to_add.extend(
-                process_editor_rows(wr_editor, "Football")
-            )
-    
-            all_rows_to_add.extend(
-                process_editor_rows(defense_editor, "Football")
-            )
-    
-        # =====================================================
-        # SAVE BUTTON
-        # =====================================================
-    
-        st.divider()
-    
-        if st.button("💾 Save Team Game", use_container_width=True):
-    
-            if team_opp.strip() == "":
-                st.error("Please enter an opponent.")
-    
-            elif len(all_rows_to_add) == 0:
-                st.error("Please enter at least one player stat line.")
-    
-            else:
-    
-                st.session_state[COACH_TABLE_KEY] = pd.concat(
-                    [
-                        st.session_state[COACH_TABLE_KEY],
-                        pd.DataFrame(all_rows_to_add)
-                    ],
-                    ignore_index=True
-                )
-    
-                save_to_db(
-                    COACH_TABLE_KEY,
-                    st.session_state[COACH_TABLE_KEY]
-                )
-
-                st.session_state["team_game_save_confirmation"] = {
-                    "sport": team_sport,
-                    "opponent": team_opp,
-                    "date": str(team_date),
-                    "count": len(all_rows_to_add)
-                }
-                
+            if st.button("💾 Save Roster Changes"):
+                st.session_state[ROSTER_TABLE_KEY] = edited_roster.dropna(subset=["Player"])
+                save_to_db(ROSTER_TABLE_KEY, st.session_state[ROSTER_TABLE_KEY])
+                st.success("Roster saved.")
                 st.rerun()
-    
 
-    # ===================================================================
-    # DASHBOARD TAB
-    # ===================================================================
-    with dashboard_tab:
-        coach_df = clean_coach_df(st.session_state.coach_roster_games)
-        if len(coach_df) == 0:
-            st.info("No roster data yet. Add player games in the Enter Roster Stats tab.")
+    # ════════════════════════════════════════════════════════
+    # TAB — TEAM GAME (bulk entry for a whole game at once)
+    # ════════════════════════════════════════════════════════
+    with log_tab:
+        st.subheader("➕ Log Game")
+        st.caption("Log a full game for multiple players at once. Players pre-filled from your roster.")
+
+        if "team_game_save_confirmation" in st.session_state:
+            conf = st.session_state.pop("team_game_save_confirmation")
+            st.success(f"✅ Saved {conf['count']} player lines — {conf['sport']} vs {conf['opponent']} on {conf['date']}.")
+
+        roster_df = get_roster_df()
+        if len(roster_df) == 0:
+            st.warning("Add players to your Roster first.")
         else:
-            sports_available = ["All"] + sorted(coach_df["Sport"].dropna().unique().tolist())
-            sport_filter = st.selectbox("Filter by sport", sports_available, key="coach_dash_sport")
-            filtered = coach_df if sport_filter == "All" else coach_df[coach_df["Sport"] == sport_filter]
-            summary = coach_summary(filtered, "All")
+            tg_sport = st.selectbox("Sport", list(SPORT_POSITIONS.keys()), key="tg_sport")
+            sport_players_tg = roster_players_for_sport(tg_sport)
 
-            k1, k2, k3, k4 = st.columns(4)
-            with k1: st.metric("Roster Players",    summary["Player"].nunique())
-            with k2: st.metric("Games Logged",       len(filtered))
-            with k3: st.metric("Sports Tracked",     filtered["Sport"].nunique())
-            with k4: st.metric("Avg Games/Player",   round(summary["Games"].mean(), 1))
+            gi1,gi2,gi3 = st.columns(3)
+            with gi1: tg_date   = st.date_input("Game Date", key="tg_date")
+            with gi2: tg_opp    = st.text_input("Opponent",  key="tg_opp")
+            with gi3: tg_result = st.selectbox("Result", ["","W","L","T","ND"], key="tg_result")
+            gs1,gs2 = st.columns(2)
+            with gs1: tg_team_score = st.number_input("Team Score", min_value=0, step=1, key="tg_tscore")
+            with gs2: tg_opp_score  = st.number_input("Opp Score",  min_value=0, step=1, key="tg_oscore")
 
-            st.subheader("Roster Leaderboard")
-            st.markdown("#### How Impact Score Is Calculated")
-            for sn in sorted(summary["Sport"].unique()):
-                st.markdown(get_impact_score_explanation(sn))
+            if not sport_players_tg:
+                st.info(f"No {tg_sport} players on your roster yet.")
+            else:
+                st.markdown("---")
+                st.markdown("**Enter stats for each player. Leave at 0 to skip.**")
 
-            st.dataframe(summary, use_container_width=True, hide_index=True)
+                # Build stat columns per sport
+                SPORT_STAT_COLS = {
+                    "Basketball":        ["Points","Rebounds","Assists","Steals","Blocks","Turnovers"],
+                    "Baseball Hitting":  ["At Bats","Hits","Runs","RBIs","Walks","Strikeouts","Doubles","Triples","Home Runs","Stolen Bases"],
+                    "Baseball Pitching": ["Innings Pitched","Strikeouts","Walks","Hits Allowed","Earned Runs","Home Runs Allowed","Pitches Thrown"],
+                    "Football":          ["Completions","Attempts","Passing Yards","Passing TDs","Interceptions",
+                                          "Carries","Rushing Yards","Rushing TDs",
+                                          "Targets","Receptions","Receiving Yards","Receiving TDs",
+                                          "Tackles","Assists_FB","Sacks","Passes Defended","Forced Fumbles","Fumble Recoveries"],
+                }
+                stat_cols = SPORT_STAT_COLS.get(tg_sport, [])
+
+                # Build prefilled df from roster
+                prefilled_rows = []
+                for pname in sport_players_tg:
+                    row = {"Player": pname, "Position": get_player_position(pname)}
+                    for sc in stat_cols:
+                        row[sc] = 0
+                    prefilled_rows.append(row)
+                prefilled_df = pd.DataFrame(prefilled_rows)
+
+                tg_editor = st.data_editor(
+                    prefilled_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="fixed",
+                    disabled=["Player","Position"],
+                    key="team_game_editor",
+                )
+
+                st.divider()
+                if st.button("💾 Save Team Game", use_container_width=True):
+                    if tg_opp.strip() == "":
+                        st.error("Enter an opponent.")
+                    else:
+                        rows_to_add = []
+                        for _, row in tg_editor.iterrows():
+                            player_name = str(row.get("Player","")).strip()
+                            if not player_name:
+                                continue
+                            new_row = {col: 0 for col in coach_cols}
+                            new_row.update({
+                                "Sport": tg_sport, "Player": player_name,
+                                "Position": row.get("Position",""),
+                                "Date": pd.to_datetime(tg_date), "Opponent": tg_opp,
+                                "Team Score": tg_team_score, "Opponent Score": tg_opp_score,
+                                "Result": tg_result,
+                            })
+                            for sc in stat_cols:
+                                new_row[sc] = pd.to_numeric(row.get(sc, 0), errors="coerce") or 0
+                            rows_to_add.append(new_row)
+
+                        if rows_to_add:
+                            st.session_state[COACH_TABLE_KEY] = pd.concat(
+                                [st.session_state[COACH_TABLE_KEY], pd.DataFrame(rows_to_add)],
+                                ignore_index=True,
+                            )
+                            save_to_db(COACH_TABLE_KEY, st.session_state[COACH_TABLE_KEY])
+                            st.session_state["team_game_save_confirmation"] = {
+                                "sport": tg_sport, "opponent": tg_opp,
+                                "date": str(tg_date), "count": len(rows_to_add)
+                            }
+                            st.rerun()
+
+    # ════════════════════════════════════════════════════════
+    # TAB — DASHBOARD
+    # ════════════════════════════════════════════════════════
+    with dashboard_tab:
+        coach_df = clean_coach_df(st.session_state[COACH_TABLE_KEY])
+        if len(coach_df) == 0:
+            st.info("No game data yet. Log some games first.")
+        else:
+            summary = coach_summary(coach_df)
+
+            # ── Top-line metrics ─────────────────────────────
+            k1,k2,k3,k4,k5 = st.columns(5)
+            with k1: st.metric("Roster Size",      summary["Player"].nunique())
+            with k2: st.metric("Games Logged",     len(coach_df))
+            with k3: st.metric("Sports",           coach_df["Sport"].nunique())
+            with k4:
+                total_w = (coach_df["Result"].str.upper() == "W").sum()
+                total_l = (coach_df["Result"].str.upper() == "L").sum()
+                st.metric("Team W",  int(total_w))
+            with k5:
+                st.metric("Team L",  int(total_l))
+
+            st.markdown("---")
+
+            # ── Leaderboard ──────────────────────────────────
+            st.subheader("🏆 Roster Leaderboard")
+            sport_filter = st.selectbox(
+                "Filter by sport",
+                ["All"] + sorted(coach_df["Sport"].unique().tolist()),
+                key="dash_sport_filter"
+            )
+            filtered_summary = summary if sport_filter == "All" else summary[summary["Sport"]==sport_filter]
+            st.dataframe(filtered_summary, use_container_width=True, hide_index=True)
+
             st.download_button(
-                "⬇️ Download Roster Summary CSV",
-                data=summary.to_csv(index=False).encode("utf-8"),
-                file_name="coach_roster_summary.csv",
-                mime="text/csv",
+                "⬇️ Download Leaderboard CSV",
+                data=filtered_summary.to_csv(index=False).encode("utf-8"),
+                file_name="roster_leaderboard.csv", mime="text/csv",
             )
 
-            leaders = summary.sort_values("Impact Score", ascending=False).head(12)
+            leaders = filtered_summary.sort_values("Impact Score", ascending=False).head(12)
             fig = px.bar(leaders, x="Impact Score", y="Player", color="Sport",
-                         orientation="h", title="Top Players by Impact Score")
-            fig.update_layout(yaxis=dict(autorange="reversed"))
+                         orientation="h", title="Top Players by Impact Score",
+                         color_discrete_sequence=px.colors.qualitative.Bold)
+            fig.update_layout(yaxis=dict(autorange="reversed"), plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, use_container_width=True)
 
-            st.subheader("Player Trend Explorer")
-            player_choice = st.selectbox(
-                "Choose player", sorted(filtered["Player"].unique()), key="coach_trend_player"
-            )
-            player_games = filtered[filtered["Player"] == player_choice].sort_values("Date")
+            # ── Player trend explorer ────────────────────────
+            st.markdown("---")
+            st.subheader("📈 Player Trend Explorer")
+            all_players = sorted(coach_df["Player"].unique())
+            trend_player = st.selectbox("Player", all_players, key="dash_trend_player")
+            player_games = coach_df[coach_df["Player"]==trend_player].sort_values("Date")
             possible_stats = [
                 c for c in player_games.select_dtypes(include="number").columns
-                if player_games[c].sum() != 0 and c not in ["Team Score", "Opponent Score"]
+                if player_games[c].sum() != 0 and c not in ["Team Score","Opponent Score"]
             ]
             if possible_stats:
-                trend_stat = st.selectbox("Choose stat", possible_stats, key="coach_trend_stat")
-                trend_fig = px.line(
-                    player_games, x="Date", y=trend_stat, markers=True,
-                    hover_data=["Opponent", "Sport", "Position"],
-                    title=f"{player_choice}: {trend_stat} Over Time",
-                )
+                trend_stat = st.selectbox("Stat", possible_stats, key="dash_trend_stat")
+                trend_fig  = px.line(player_games, x="Date", y=trend_stat, markers=True,
+                                     hover_data=["Opponent","Sport","Position"],
+                                     title=f"{trend_player} — {trend_stat} Over Time")
                 st.plotly_chart(trend_fig, use_container_width=True)
 
-    # ===================================================================
-    # PLAYER COMPS TAB
-    # ===================================================================
-    with comps_tab:
-        coach_df = clean_coach_df(st.session_state.coach_roster_games)
-        summary  = coach_summary(coach_df, "All")
-        if len(summary) == 0:
-            st.info("No roster summaries available yet.")
-        else:
-            st.subheader("Find Player Comps")
-            selected_player = st.selectbox(
-                "Choose a roster player", summary["Player"].tolist(), key="coach_comp_player"
+            # ── AI Team Report ───────────────────────────────
+            st.markdown("---")
+            st.subheader("🤖 AI Team Report")
+            st.caption("Claude analyzes your whole roster and gives you a coaching breakdown.")
+
+            ai_sport_filter = st.selectbox(
+                "Generate report for sport",
+                sorted(coach_df["Sport"].unique().tolist()),
+                key="ai_team_sport"
             )
-            profile = get_selected_player_profile(summary, selected_player)
-            if profile is not None:
-                p1, p2, p3 = st.columns(3)
+
+            if st.button("Generate AI Team Report", use_container_width=True):
+                ai_summary = summary[summary["Sport"]==ai_sport_filter].copy()
+                if len(ai_summary) == 0:
+                    st.warning("No data for that sport.")
+                else:
+                    summary_text = ai_summary.to_string(index=False)
+                    prompt = f"""You are an elite {ai_sport_filter} coach analyzing your full roster after reviewing season stats.
+
+ROSTER SUMMARY:
+{summary_text}
+
+Write a sharp, honest team scouting report with these sections:
+
+## 🌟 Team Strengths
+What does this roster do well collectively? Back it with specific player names and numbers.
+
+## ⚠️ Team Weaknesses
+Where is the roster thin or underperforming? Be specific and honest.
+
+## 🏆 Top 3 Players to Build Around
+Name them, explain why using their stats, and describe the role each should play.
+
+## 📋 Depth Concerns
+Which positions or roles have no reliable backup? What's the biggest roster vulnerability?
+
+## 🎯 This Season's Priority
+One clear directive for the coaching staff — what should you focus on most to win more games?
+
+Keep it under 400 words. Sound like a real coach, not a chatbot. Use player names and actual numbers."""
+
+                    with st.spinner("Generating team report..."):
+                        try:
+                            import anthropic as _anthropic
+                            client = _anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_KEY"])
+                            report_text = ""
+                            placeholder = st.empty()
+                            with client.messages.stream(
+                                model="claude-sonnet-4-6",
+                                max_tokens=800,
+                                messages=[{"role":"user","content":prompt}],
+                            ) as stream:
+                                for text in stream.text_stream:
+                                    report_text += text
+                                    placeholder.markdown(report_text)
+
+                            st.download_button(
+                                "📋 Download Team Report",
+                                data=report_text,
+                                file_name=f"team_report_{ai_sport_filter.lower().replace(' ','_')}.txt",
+                                mime="text/plain",
+                            )
+                        except Exception as e:
+                            st.error(f"Could not generate report: {e}")
+
+    # ════════════════════════════════════════════════════════
+    # TAB — PLAYER COMPS
+    # ════════════════════════════════════════════════════════
+    with comps_tab:
+        coach_df = clean_coach_df(st.session_state[COACH_TABLE_KEY])
+        summary  = coach_summary(coach_df)
+        if len(summary) == 0:
+            st.info("No roster data yet.")
+        else:
+            st.subheader("🧬 Player Comps")
+            selected_player = st.selectbox("Choose player", summary["Player"].tolist(), key="comp_player")
+            profile = summary[summary["Player"]==selected_player]
+            if len(profile) > 0:
+                profile = profile.iloc[0]
+                p1,p2,p3 = st.columns(3)
                 with p1: st.metric("Sport",        profile["Sport"])
                 with p2: st.metric("Position",     profile["Position"])
-                with p3: st.metric("Impact Score", round(profile.get("Impact Score", 0), 2))
+                with p3: st.metric("Impact Score", round(profile.get("Impact Score",0),2))
 
-                st.write("Player profile:")
-                st.dataframe(
-                    pd.DataFrame(profile).reset_index().rename(
-                        columns={"index": "Metric", profile.name: "Value"}
-                    ),
-                    hide_index=True, use_container_width=True,
-                )
-
-                nba_comp_season = "2025-26"
-                mlb_comp_year   = 2025
-                nfl_comp_season = 2025
-
+                season_selectors = {}
                 if profile["Sport"] == "Basketball":
-                    nba_comp_season = st.selectbox(
-                        "NBA comp season",
-                        ["2022-23", "2023-24", "2024-25", "2025-26"],
-                        index=3, key="coach_nba_comp_season",
-                    )
-                elif profile["Sport"] in ["Baseball Hitting", "Baseball Pitching"]:
-                    mlb_comp_year = st.selectbox(
-                        "MLB comp year", [2023, 2024, 2025], index=2, key="coach_mlb_comp_year"
-                    )
+                    season_selectors["nba"] = st.selectbox("NBA season",["2022-23","2023-24","2024-25","2025-26"],index=3,key="comp_nba")
+                elif profile["Sport"] in ["Baseball Hitting","Baseball Pitching"]:
+                    season_selectors["mlb"] = st.selectbox("MLB year",[2023,2024,2025],index=2,key="comp_mlb")
                 elif profile["Sport"] == "Football":
-                    nfl_comp_season = st.selectbox(
-                        "NFL comp season", [2023, 2024, 2025], index=2, key="coach_nfl_comp_season"
-                    )
+                    season_selectors["nfl"] = st.selectbox("NFL season",[2023,2024,2025],index=2,key="comp_nfl")
 
-                comps = find_coach_player_comp(profile, nba_comp_season, mlb_comp_year, nfl_comp_season)
+                comps = find_coach_player_comp(
+                    profile,
+                    nba_season=season_selectors.get("nba","2025-26"),
+                    mlb_year=season_selectors.get("mlb",2025),
+                    nfl_season=season_selectors.get("nfl",2025),
+                )
                 if len(comps) > 0:
-                    st.write("Top pro-style comps:")
                     st.dataframe(comps, hide_index=True, use_container_width=True)
-                    comp_fig = px.bar(
-                        comps, x="Similarity Score", y="Comp", orientation="h",
-                        title=f"Top Comps for {selected_player}",
-                    )
+                    comp_fig = px.bar(comps, x="Similarity Score", y="Comp", orientation="h",
+                                      title=f"Top Comps for {selected_player}")
                     comp_fig.update_layout(yaxis=dict(autorange="reversed"))
                     st.plotly_chart(comp_fig, use_container_width=True)
 
-    # ===================================================================
-    # DEPTH CHART TAB
-    # ===================================================================
-    with depth_chart_tab:
-        coach_df = clean_coach_df(st.session_state.coach_roster_games)
-        summary  = coach_summary(coach_df, "All")
+                # Individual AI scouting report
+                render_coach_roster_ai_report(
+                    profile["Sport"], selected_player,
+                    coach_df[coach_df["Player"]==selected_player]
+                )
+
+    # ════════════════════════════════════════════════════════
+    # TAB — DEPTH CHART
+    # ════════════════════════════════════════════════════════
+    with depth_tab:
+        coach_df = clean_coach_df(st.session_state[COACH_TABLE_KEY])
+        summary  = coach_summary(coach_df)
 
         if len(summary) == 0:
-            st.info("No roster data yet. Add player games first.")
+            st.info("No roster data yet.")
         else:
-            st.subheader("Depth Chart Visual")
-            st.caption("Players ranked by Impact Score within each position.")
+            st.subheader("🧩 Depth Chart")
+            st.caption("Ranked by Impact Score within each position.")
 
-            depth_sport = st.selectbox(
-                "Choose sport", sorted(summary["Sport"].unique()), key="depth_chart_sport"
-            )
-            depth_summary = summary[summary["Sport"] == depth_sport].copy()
+            depth_sport = st.selectbox("Sport", sorted(summary["Sport"].unique()), key="depth_sport")
+            depth_summary = summary[summary["Sport"]==depth_sport].copy()
 
-            nba_depth_season = "2025-26"
-            mlb_depth_year   = 2025
-            nfl_depth_season = 2025
-
-            if depth_sport == "Basketball":
-                nba_depth_season = st.selectbox(
-                    "NBA comp season",
-                    ["2022-23", "2023-24", "2024-25", "2025-26"],
-                    index=3, key="depth_nba_season",
-                )
-            elif depth_sport in ["Baseball Hitting", "Baseball Pitching"]:
-                mlb_depth_year = st.selectbox(
-                    "MLB comp year", [2023, 2024, 2025], index=2, key="depth_mlb_year"
-                )
-            elif depth_sport == "Football":
-                nfl_depth_season = st.selectbox(
-                    "NFL comp season", [2023, 2024, 2025], index=2, key="depth_nfl_season"
-                )
+            if profile["Sport"] == "Basketball":
+                depth_nba = st.selectbox("NBA season",["2022-23","2023-24","2024-25","2025-26"],index=3,key="depth_nba")
+            else:
+                depth_nba = "2025-26"
+            depth_mlb = 2025
+            depth_nfl = 2025
 
             position_order = {
-                "Basketball":        ["PG", "SG", "SF", "PF", "C", "G", "Wing", "F"],
-                "Baseball Hitting":  ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"],
-                "Baseball Pitching": ["SP", "RP", "CL"],
-                "Football":          ["QB", "RB", "FB", "WR", "TE",
-                                      "OT", "OG", "C",
-                                      "DE", "DT", "LB", "CB", "S", "K", "P"],
+                "Basketball":        ["PG","SG","SF","PF","C","G","Wing","F"],
+                "Baseball Hitting":  ["C","1B","2B","3B","SS","LF","CF","RF","DH"],
+                "Baseball Pitching": ["SP","RP","CL"],
+                "Football":          ["QB","RB","FB","WR","TE","OT","OG","C","DE","DT","LB","CB","S","K","P"],
             }
-
-            ordered = [p for p in position_order.get(depth_sport, [])
-                       if p in depth_summary["Position"].unique()]
-            extras  = sorted([p for p in depth_summary["Position"].unique()
-                               if p not in ordered])
+            ordered = [p for p in position_order.get(depth_sport,[]) if p in depth_summary["Position"].unique()]
+            extras  = sorted([p for p in depth_summary["Position"].unique() if p not in ordered])
 
             for pos in ordered + extras:
                 pos_players = (
-                    depth_summary[depth_summary["Position"] == pos]
+                    depth_summary[depth_summary["Position"]==pos]
                     .sort_values("Impact Score", ascending=False)
                     .reset_index(drop=True)
                 )
@@ -3413,26 +2910,42 @@ if page == "Coaches View":
 
                 for i, (_, player_row) in enumerate(pos_players.iterrows()):
                     with card_cols[i % len(card_cols)]:
-                        comps = find_coach_player_comp(
-                            player_row, nba_depth_season, mlb_depth_year, nfl_depth_season
-                        )
-                        top_comp = comps.iloc[0]["Comp"] if len(comps) > 0 else "No comp found"
+                        try:
+                            comps    = find_coach_player_comp(player_row, depth_nba, depth_mlb, depth_nfl)
+                            top_comp = comps.iloc[0]["Comp"] if len(comps) > 0 else "—"
+                        except:
+                            top_comp = "—"
 
-                        st.markdown(
-                            f"""
-                            <div style="
-                                border: 1px solid #ddd;
-                                border-radius: 14px;
-                                padding: 16px;
-                                margin-bottom: 12px;
-                                background-color: #fafafa;
-                            ">
-                                <h4 style="margin-bottom: 4px;">#{i + 1} {player_row["Player"]}</h4>
-                                <p style="margin: 0;"><b>Position:</b> {player_row["Position"]}</p>
-                                <p style="margin: 0;"><b>Games:</b> {int(player_row["Games"])}</p>
-                                <p style="margin: 0;"><b>Impact Score:</b> {round(player_row["Impact Score"], 2)}</p>
-                                <p style="margin-top: 8px;"><b>Pro Comp:</b> {top_comp}</p>
+                        rank_color = ["#f59e0b","#94a3b8","#cd7c3a"][min(i,2)]
+                        st.markdown(f"""
+                        <div style="
+                            border:2px solid {rank_color};
+                            border-radius:14px;
+                            padding:16px;
+                            margin-bottom:10px;
+                            background:#fafafa;
+                        ">
+                            <div style="display:flex;justify-content:space-between;align-items:center;">
+                                <span style="
+                                    background:{rank_color};color:white;
+                                    border-radius:50%;width:28px;height:28px;
+                                    display:inline-flex;align-items:center;justify-content:center;
+                                    font-weight:700;font-size:13px;
+                                ">#{i+1}</span>
+                                <span style="font-size:13px;color:#64748b;">
+                                    Impact: <b>{round(player_row['Impact Score'],1)}</b>
+                                </span>
                             </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
+                            <h4 style="margin:8px 0 2px 0;">{player_row["Player"]}</h4>
+                            <span style="
+                                background:#dbeafe;color:#1d4ed8;
+                                border-radius:6px;padding:2px 8px;
+                                font-size:12px;font-weight:600;
+                            ">{player_row["Position"]}</span>
+                            <p style="margin:8px 0 0 0;font-size:13px;color:#475569;">
+                                <b>Comp:</b> {top_comp}<br>
+                                <b>Games:</b> {int(player_row["Games"])} &nbsp;
+                                <b>W/L:</b> {int(player_row.get("W",0))}/{int(player_row.get("L",0))}
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
