@@ -7,23 +7,91 @@ import nflreadpy as nfl
 import sqlite3
 import anthropic
 import openai
+import hashlib # add
 
 
 # We need a virtual environment and to install all of our packages in it then activate it and run app
 
 # cd ~/Desktop/Rylan_Project
-# conda create -n sports_app_env python=3.10 -y
-# conda activate sports_app_env
-# conda install -c conda-forge numba=0.65.1 llvmlite=0.47.0 onnxruntime -y
+# python3.10 -m venv sports_app_env
+# source sports_app_env/bin/activate
 # python -m pip install --upgrade pip setuptools wheel
-# python -m pip install rembg
-# python -m pip install streamlit pandas nba_api pybaseball nflreadpy anthropic openai plotly Pillow requests "polars[rtcompat]"
+# python -m pip install \
+#   streamlit pandas nba_api pybaseball nflreadpy anthropic openai \
+#   plotly Pillow requests "polars[rtcompat]"
+# python -m pip install \
+#   numba==0.60.0 llvmlite==0.43.0 onnxruntime rembg
+
+# source sports_app_env/bin/activate
 # python -m streamlit run my_stats_tracker.py
 
 
 
+# -----------------------------------
+# USER ID SYSTEM
+# -----------------------------------
 
-# Set up database
+def get_user_id():
+    """
+    Returns the current user's ID from session state.
+    Users set their own username/ID in the sidebar login widget.
+    The ID is hashed to create a safe DB key prefix.
+    """
+    return st.session_state.get("user_id", None)
+
+
+def user_table_key(base_key):
+    """Namespace a DB table key with the current user's ID."""
+    uid = get_user_id()
+    if uid:
+        safe = hashlib.md5(uid.encode()).hexdigest()[:12]
+        return f"u_{safe}_{base_key}"
+    return base_key
+
+def render_user_sidebar():
+    """Render the user login/ID widget in a collapsible sidebar section."""
+    st.sidebar.markdown("---")
+
+    with st.sidebar.expander("👤 User ID", expanded=not bool(get_user_id())):
+        if get_user_id():
+            st.success(f"Logged in as: **{st.session_state.user_id}**")
+
+            if st.button("Switch User / Log Out"):
+                for key in list(st.session_state.keys()):
+                    if key not in ["page", "sport"]:
+                        del st.session_state[key]
+                st.session_state.user_id = None
+                st.rerun()
+
+        else:
+            st.info("Enter a username to keep your stats separate from other users.")
+
+            username_input = st.text_input(
+                "Username",
+                placeholder="e.g. john_doe",
+                key="username_input"
+            )
+
+            if st.button("Set User ID"):
+                if username_input.strip() == "":
+                    st.error("Please enter a username.")
+                else:
+                    st.session_state.user_id = username_input.strip()
+
+                    for tkey in list(TABLES.keys()):
+                        if tkey in st.session_state:
+                            del st.session_state[tkey]
+
+                    st.rerun()
+
+            st.caption(
+                "⚠️ Anyone with the same username can access that data, so pick something unique."
+            )
+
+
+# -----------------------------------
+# DATABASE & TABLES
+# -----------------------------------
 
 DB_PATH = "stats.db"
 
@@ -35,24 +103,34 @@ TABLES = {
     "my_football_games_rb": ["Date","Opponent","Team Score","Opponent Score","Carries","Rushing Yards","Rushing TDs","Receptions","Receiving Yards","Receiving TDs"],
     "my_football_games_wrte": ["Date","Opponent","Team Score","Opponent Score","Targets","Receptions","Receiving Yards","Receiving TDs","Rushing Yards","Rushing TDs"],
     "my_football_games_def": ["Date","Opponent","Team Score","Opponent Score","Tackles","Assists","Sacks","Interceptions","Passes Defended","Forced Fumbles","Fumble Recoveries"],
+    "coach_roster_games": [
+    "Sport","Player","Position","Date","Opponent","Team Score","Opponent Score",
+    "Points","Rebounds","Assists","Steals","Blocks","Turnovers",
+    "At Bats","Hits","Runs","RBIs","Walks","Strikeouts","Doubles","Triples","Home Runs","Stolen Bases",
+    "Innings Pitched","Hits Allowed","Earned Runs","Home Runs Allowed","Pitches Thrown","Result",
+    "Completions","Attempts","Passing Yards","Passing TDs","Interceptions",
+    "Carries","Rushing Yards","Rushing TDs","Targets","Receptions","Receiving Yards","Receiving TDs",
+    "Tackles","Assists_FB","Sacks","Passes Defended","Forced Fumbles","Fumble Recoveries"],
 }
 
+
 def save_to_db(key, df):
+    """Save a DataFrame to the DB under a user-namespaced table name."""
     conn = sqlite3.connect(DB_PATH)
-
     df_copy = df.copy()
-
     if "Date" in df_copy.columns:
         df_copy["Date"] = pd.to_datetime(df_copy["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
-
-    df_copy.to_sql(key, conn, if_exists="replace", index=False)
+    db_key = user_table_key(key)
+    df_copy.to_sql(db_key, conn, if_exists="replace", index=False)
     conn.close()
 
 
 def load_from_db(key, columns):
+    """Load a DataFrame from the DB using a user-namespaced table name."""
     conn = sqlite3.connect(DB_PATH)
+    db_key = user_table_key(key)
     try:
-        df = pd.read_sql(f"SELECT * FROM \"{key}\"", conn)
+        df = pd.read_sql(f'SELECT * FROM "{db_key}"', conn)
     except Exception:
         df = pd.DataFrame(columns=columns)
     conn.close()
@@ -71,7 +149,13 @@ if "page" not in st.session_state:
 if "sport" not in st.session_state:
     st.session_state.sport = "Basketball"
 
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+
 page = st.session_state.page
+
+# Render user sidebar on every page
+render_user_sidebar()
 
 if page == "My Stats Tracker":
     sport = st.sidebar.radio(
@@ -80,10 +164,8 @@ if page == "My Stats Tracker":
         index=["Basketball", "Baseball", "Football"].index(st.session_state.sport),
         key="sport_radio"
     )
-
     st.session_state.sport = sport
 
-# new
 if page == "Trading Card":
     sport = st.sidebar.radio(
         "Choose a sport for your card",
@@ -91,10 +173,20 @@ if page == "Trading Card":
         index=["Basketball", "Baseball", "Football"].index(st.session_state.sport),
         key="card_sport_radio"
     )
-
     st.session_state.sport = sport
 
-# new
+if page == "Coaches View":
+    st.sidebar.info("Coach dashboard: roster-wide stats, comps, and graphs")
+
+# -----------------------------------
+# GATE: Require user login to use the app
+# -----------------------------------
+
+if not get_user_id() and page != "Home":
+    st.warning("⚠️ Please set a User ID in the sidebar to use this page.")
+    st.stop()
+
+# Load tables from DB for current user (after user is known)
 for table_key, columns in TABLES.items():
     if table_key not in st.session_state:
         st.session_state[table_key] = load_from_db(table_key, columns)
@@ -215,42 +307,58 @@ def load_nfl_player_data(season):
 
 if page == "Home":
     st.title("My Stats Tracker")
+
+    # Show login prompt prominently if not logged in
+    if not get_user_id():
+        st.info("👤 **Get started:** Enter a username in the sidebar to track your personal stats.")
+    else:
+        st.success(f"Welcome back, **{st.session_state.user_id}**! Your stats are saved privately under your username.")
+
     st.write("Track your performance, see trends over time, and find your closest pro player match.")
     st.markdown("---")
 
-    # col1, col2, col3 = st.columns(3)
-    col1, col2, col3, col4 = st.columns(4) # new
-
-    with col1:
-        st.subheader("🏀 Basketball")
-        st.write("Track points, rebounds, assists and compare to NBA players.")
-        if st.button("Go to Basketball Tracker", use_container_width=True):
-            st.session_state.page = "My Stats Tracker"
-            st.session_state.sport = "Basketball"
-            st.rerun()
-
-    with col2:
-        st.subheader("⚾ Baseball")
-        st.write("Track hitting and pitching stats and compare to MLB players.")
-        if st.button("Go to Baseball Tracker", use_container_width=True):
-            st.session_state.page = "My Stats Tracker"
-            st.session_state.sport = "Baseball"
-            st.rerun()
-
-    with col3:
-        st.subheader("🏈 Football")
-        st.write("Track QB, RB, WR/TE, or defensive stats and compare to NFL players.")
-        if st.button("Go to Football Tracker", use_container_width=True):
-            st.session_state.page = "My Stats Tracker"
-            st.session_state.sport = "Football"
-            st.rerun()
-
-    # new
-    with col4:
-        st.subheader("🃏 Trading Card")
-        st.write("Generate a pro trading card with your stats and photo.")
-        if st.button("Go to Trading Card Generator", use_container_width=True):
-            st.session_state.page = "Trading Card"
+    role = st.radio(
+        "Who are you?",
+        ["Player", "Coach"],
+        horizontal=True
+    )
+    
+    st.markdown("---")
+    
+    if role == "Player":
+        st.subheader("Choose a Tool")
+    
+        col1, col2, col3, col4 = st.columns(4)
+    
+        with col1:
+            if st.button("🏀 Basketball", use_container_width=True):
+                st.session_state.page = "My Stats Tracker"
+                st.session_state.sport = "Basketball"
+                st.rerun()
+    
+        with col2:
+            if st.button("⚾ Baseball", use_container_width=True):
+                st.session_state.page = "My Stats Tracker"
+                st.session_state.sport = "Baseball"
+                st.rerun()
+    
+        with col3:
+            if st.button("🏈 Football", use_container_width=True):
+                st.session_state.page = "My Stats Tracker"
+                st.session_state.sport = "Football"
+                st.rerun()
+    
+        with col4:
+            if st.button("🃏 Trading Card", use_container_width=True):
+                st.session_state.page = "Trading Card"
+                st.rerun()
+    
+    elif role == "Coach":
+        st.subheader("Coach Tools")
+        st.write("View roster analytics, player comps, depth charts, and team trends.")
+    
+        if st.button("📋 Open Coaches View", use_container_width=True):
+            st.session_state.page = "Coaches View"
             st.rerun()
 
 
@@ -266,7 +374,6 @@ if page == "My Stats Tracker" and sport == "Basketball":
     st.title("🏀 Basketball Stats Tracker")
     st.write("Track your games, see trends, and find your closest NBA player match.")
 
-    # Season selector lives here now
     season = st.selectbox(
         "Choose NBA season for comparison",
         ["2022-23", "2023-24", "2024-25", "2025-26"],
@@ -280,15 +387,6 @@ if page == "My Stats Tracker" and sport == "Basketball":
     players["W_PCT"]  = players["W_PCT"].round(3)
     players["TS_PCT"] = players["TS_PCT"].round(3)
 
-    # ---- Session state ----
-    # if "my_games" not in st.session_state:
-    #     st.session_state.my_games = pd.DataFrame(columns=[
-    #         "Date", "Opponent", "Team Score", "Opponent Score",
-    #         "Points", "Rebounds", "Assists", "Steals", "Blocks", "Turnovers"
-    #     ])
-
-
-    # ---- Entry form ----
     st.subheader("Add a Game")
 
     with st.form("my_stats_form"):
@@ -336,11 +434,9 @@ if page == "My Stats Tracker" and sport == "Basketball":
                 st.session_state.my_games = pd.concat(
                     [st.session_state.my_games, new_game], ignore_index=True
                 )
-                save_to_db("my_games", st.session_state.my_games) # new
-                
+                save_to_db("my_games", st.session_state.my_games)
                 st.success("Game added!")
 
-    # ---- No games yet ----
     if len(st.session_state.my_games) == 0:
         st.info("No games entered yet. Add your first game above.")
     else:
@@ -355,7 +451,6 @@ if page == "My Stats Tracker" and sport == "Basketball":
         my_games[num_cols] = my_games[num_cols].fillna(0)
         my_games = my_games.sort_values("Date").reset_index(drop=True)
 
-        # NBA normalization
         NBA_AVG_TEAM_PTS = 115.0
         my_games["Scoring Factor"] = (
             NBA_AVG_TEAM_PTS / my_games["Team Score"].replace(0, pd.NA)
@@ -368,7 +463,6 @@ if page == "My Stats Tracker" and sport == "Basketball":
         my_games["NBA_EQ_BLK"] = my_games["Blocks"]   * (my_games["Scoring Factor"] ** 0.3)
         my_games["NBA_EQ_TOV"] = my_games["Turnovers"] * my_games["Scoring Factor"]
 
-        # ---- Summary ----
         comparison_mode = st.toggle("Use NBA-adjusted stats", value=False)
 
         if comparison_mode:
@@ -401,7 +495,6 @@ if page == "My Stats Tracker" and sport == "Basketball":
             st.metric("Blocks",    my_avg.loc[0, "BLK"])
             st.metric("Turnovers", my_avg.loc[0, "TOV"])
 
-        # ---- NBA comparison ----
         st.subheader("NBA Player Comparison")
 
         nba_compare = players[["PLAYER_NAME", "TEAM_ABBREVIATION",
@@ -441,7 +534,6 @@ if page == "My Stats Tracker" and sport == "Basketball":
         match_fig.update_layout(yaxis=dict(autorange="reversed"))
         st.plotly_chart(match_fig, use_container_width=True)
 
-        # ---- Trends ----
         st.subheader("Performance Trends")
         trend_choice = st.selectbox(
             "Choose a stat to graph",
@@ -452,7 +544,6 @@ if page == "My Stats Tracker" and sport == "Basketball":
                             title=f"{trend_choice} Over Time")
         st.plotly_chart(trend_fig, use_container_width=True)
 
-        # ---- Game log ----
         st.subheader("My Game Log")
         log_cols = ["Date", "Opponent", "Team Score", "Opponent Score",
                     "Points", "Rebounds", "Assists", "Steals", "Blocks", "Turnovers"]
@@ -461,7 +552,6 @@ if page == "My Stats Tracker" and sport == "Basketball":
         game_log.index = game_log.index + 1
         st.dataframe(game_log)
 
-        # ---- Delete ----
         st.subheader("Delete a Game")
         del_df = my_games.copy()
         del_df["Date_str"] = del_df["Date"].dt.strftime("%Y-%m-%d")
@@ -481,8 +571,7 @@ if page == "My Stats Tracker" and sport == "Basketball":
             st.session_state.my_games = st.session_state.my_games.drop(
                 st.session_state.my_games.index[del_idx]
             ).reset_index(drop=True)
-            save_to_db("my_games", st.session_state.my_games) # new
-            
+            save_to_db("my_games", st.session_state.my_games)
             st.success("Game deleted.")
             st.rerun()
 
@@ -509,17 +598,8 @@ if page == "My Stats Tracker" and sport == "Baseball":
         "Hits Allowed", "Earned Runs", "Home Runs Allowed", "Pitches Thrown", "Result"
     ]
 
-    # if "my_baseball_games" not in st.session_state:
-    #     st.session_state.my_baseball_games = pd.DataFrame(columns=BASEBALL_COLUMNS)
-    # if "my_pitching_games" not in st.session_state:
-    #     st.session_state.my_pitching_games = pd.DataFrame(columns=PITCHING_COLUMNS)
-
-    
     hitting_tab, pitching_tab = st.tabs(["🏏 Hitting", "⚾ Pitching"])
 
-    # ==========================
-    # HITTING TAB
-    # ==========================
     with hitting_tab:
         st.subheader("Add a Game")
 
@@ -571,10 +651,7 @@ if page == "My Stats Tracker" and sport == "Baseball":
                     st.session_state.my_baseball_games = pd.concat(
                         [st.session_state.my_baseball_games, new_game], ignore_index=True
                     )
-                    
-                    save_to_db("my_baseball_games", st.session_state.my_baseball_games) # new
-                    
-                    
+                    save_to_db("my_baseball_games", st.session_state.my_baseball_games)
                     st.success("Game added!")
 
         if len(st.session_state.my_baseball_games) == 0:
@@ -719,15 +796,10 @@ if page == "My Stats Tracker" and sport == "Baseball":
                 st.session_state.my_baseball_games = st.session_state.my_baseball_games.drop(
                     st.session_state.my_baseball_games.index[h_del_idx]
                 ).reset_index(drop=True)
-                
-                save_to_db("my_baseball_games", st.session_state.my_baseball_games) # new
-                
+                save_to_db("my_baseball_games", st.session_state.my_baseball_games)
                 st.success("Game deleted.")
                 st.rerun()
 
-    # ==========================
-    # PITCHING TAB
-    # ==========================
     with pitching_tab:
         st.subheader("Add a Pitching Outing")
 
@@ -775,8 +847,7 @@ if page == "My Stats Tracker" and sport == "Baseball":
                     st.session_state.my_pitching_games = pd.concat(
                         [st.session_state.my_pitching_games, new_outing], ignore_index=True
                     )
-                    save_to_db("my_pitching_games", st.session_state.my_pitching_games) # new
-
+                    save_to_db("my_pitching_games", st.session_state.my_pitching_games)
                     st.success("Pitching outing added!")
 
         if len(st.session_state.my_pitching_games) == 0:
@@ -906,9 +977,7 @@ if page == "My Stats Tracker" and sport == "Baseball":
                 st.session_state.my_pitching_games = st.session_state.my_pitching_games.drop(
                     st.session_state.my_pitching_games.index[p_del_idx]
                 ).reset_index(drop=True)
-                
-                save_to_db("my_pitching_games", st.session_state.my_pitching_games) # new
-
+                save_to_db("my_pitching_games", st.session_state.my_pitching_games)
                 st.success("Outing deleted.")
                 st.rerun()
 
@@ -952,10 +1021,6 @@ if page == "My Stats Tracker" and sport == "Football":
     FOOTBALL_COLUMNS = FOOTBALL_MODE_COLUMNS[football_mode]
     session_key = f"my_football_games_{mode_key}"
     db_key = f"my_football_games_{mode_key}"
-
-
-    # if session_key not in st.session_state:
-    #     st.session_state[session_key] = pd.DataFrame(columns=FOOTBALL_COLUMNS)
 
     st.subheader(f"Add a {football_mode} Game")
 
@@ -1063,9 +1128,7 @@ if page == "My Stats Tracker" and sport == "Football":
                     st.session_state[session_key] = pd.concat(
                         [st.session_state[session_key], pd.DataFrame([base])], ignore_index=True
                     )
-                    
-                    save_to_db(db_key, st.session_state[session_key]) # new
-
+                    save_to_db(db_key, st.session_state[session_key])
                     st.success(f"{football_mode} game added!")
 
     if len(st.session_state[session_key]) == 0:
@@ -1178,7 +1241,6 @@ if page == "My Stats Tracker" and sport == "Football":
                 st.metric("PD/Game", my_avg.loc[0, "PD"])
                 st.metric("FF/Game", my_avg.loc[0, "FF"])
 
-        # ---- NFL Comparison ----
         st.subheader(f"NFL {football_mode} Comparison")
         nfl_season = st.selectbox(
             "Choose NFL season", [2023, 2024, 2025], index=2,
@@ -1311,7 +1373,6 @@ if page == "My Stats Tracker" and sport == "Football":
         except Exception as e:
             st.warning(f"Could not load NFL comparison data: {e}")
 
-        # ---- Trends ----
         st.subheader("Performance Trends")
         trend_options = {
             "QB": ["Passing Yards", "Passing TDs", "Interceptions", "Rushing Yards", "Rushing TDs"],
@@ -1327,14 +1388,12 @@ if page == "My Stats Tracker" and sport == "Football":
                             title=f"{trend_choice} Over Time")
         st.plotly_chart(trend_fig, use_container_width=True)
 
-        # ---- Game log ----
         st.subheader("My Game Log")
         f_log = football_games[FOOTBALL_COLUMNS].copy()
         f_log["Date"] = f_log["Date"].dt.strftime("%Y-%m-%d")
         f_log.index = f_log.index + 1
         st.dataframe(f_log)
 
-        # ---- Delete ----
         st.subheader("Delete a Game")
         f_del_df = football_games.copy()
         f_del_df["Date_str"] = f_del_df["Date"].dt.strftime("%Y-%m-%d")
@@ -1357,10 +1416,7 @@ if page == "My Stats Tracker" and sport == "Football":
             st.session_state[session_key] = st.session_state[session_key].drop(
                 st.session_state[session_key].index[f_del_idx]
             ).reset_index(drop=True)
-            
-            save_to_db(db_key, st.session_state[session_key]) # new
-
-            
+            save_to_db(db_key, st.session_state[session_key])
             st.success("Game deleted.")
             st.rerun()
 
@@ -1377,7 +1433,6 @@ if page == "Trading Card":
     st.title("🃏 Trading Card Generator")
     st.write("Upload a photo and generate a realistic premium trading card with your real stats.")
 
-    # ---- Inputs ----
     col1, col2 = st.columns(2)
 
     with col1:
@@ -1392,7 +1447,6 @@ if page == "Trading Card":
 
     uploaded_photo = st.file_uploader("Upload your photo", type=["jpg", "jpeg", "png"])
 
-    # ---- Pull saved stats ----
     st.subheader("Your Saved Stats")
     st.caption("These will appear on your card automatically.")
 
@@ -1527,7 +1581,6 @@ if page == "Trading Card":
     else:
         st.info(f"No {sport} stats saved yet. You can still generate a card.")
 
-    # ---- Pull closest pro match for card ----
     card_pro_match = None
 
     if sport == "Basketball" and len(st.session_state.get("my_games", pd.DataFrame())) > 0:
@@ -1618,7 +1671,7 @@ if page == "Trading Card":
     elif sport == "Football":
         try:
             pos_upper = card_position.upper().strip()
-    
+
             if pos_upper in ["QB", "QUARTERBACK"]:
                 mk = "qb"
             elif pos_upper in ["RB", "RUNNING BACK", "HALFBACK"]:
@@ -1629,21 +1682,21 @@ if page == "Trading Card":
                 mk = "def"
             else:
                 mk = "qb"
-    
+
             fg = st.session_state.get(f"my_football_games_{mk}", pd.DataFrame())
-    
+
             if len(fg) > 0:
                 fg = fg.copy()
                 nfl_players = load_nfl_player_data(2025)
-    
+
                 if mk == "qb":
                     for col in ["Completions", "Attempts", "Passing Yards", "Passing TDs", "Interceptions", "Rushing Yards", "Rushing TDs"]:
                         fg[col] = pd.to_numeric(fg[col], errors="coerce")
-    
+
                     fg["CMP_PCT"] = (
                         fg["Completions"] / fg["Attempts"].replace(0, pd.NA)
                     ).fillna(0)
-    
+
                     my_avg = pd.DataFrame([{
                         "CMP_PCT": fg["CMP_PCT"].mean(),
                         "PASS_YDS": fg["Passing Yards"].mean(),
@@ -1652,13 +1705,13 @@ if page == "Trading Card":
                         "RUSH_YDS": fg["Rushing Yards"].mean(),
                         "RUSH_TD": fg["Rushing TDs"].mean()
                     }])
-    
+
                     nfl_c = nfl_players[nfl_players["position"] == "QB"].copy()
-    
+
                     nfl_c["CMP_PCT"] = (
                         nfl_c["completions"] / nfl_c["attempts"].replace(0, pd.NA)
                     ).fillna(0)
-    
+
                     nfl_c["DISTANCE"] = (
                         ((nfl_c["passing_yards"] / nfl_c["games"] - my_avg.loc[0, "PASS_YDS"]) / 45) ** 2 +
                         ((nfl_c["passing_tds"] / nfl_c["games"] - my_avg.loc[0, "PASS_TD"]) / 0.9) ** 2 +
@@ -1667,11 +1720,11 @@ if page == "Trading Card":
                         ((nfl_c["rushing_tds"] / nfl_c["games"] - my_avg.loc[0, "RUSH_TD"]) / 0.35) ** 2 +
                         ((nfl_c["CMP_PCT"] - my_avg.loc[0, "CMP_PCT"]) / 0.08) ** 2
                     ) ** 0.5
-    
+
                 elif mk == "rb":
                     for col in ["Carries", "Rushing Yards", "Rushing TDs", "Receptions", "Receiving Yards", "Receiving TDs"]:
                         fg[col] = pd.to_numeric(fg[col], errors="coerce")
-    
+
                     my_avg = pd.DataFrame([{
                         "CAR": fg["Carries"].mean(),
                         "RUSH_YDS": fg["Rushing Yards"].mean(),
@@ -1680,9 +1733,9 @@ if page == "Trading Card":
                         "REC_YDS": fg["Receiving Yards"].mean(),
                         "REC_TD": fg["Receiving TDs"].mean()
                     }])
-    
+
                     nfl_c = nfl_players[nfl_players["position"] == "RB"].copy()
-    
+
                     nfl_c["DISTANCE"] = (
                         ((nfl_c["carries"] / nfl_c["games"] - my_avg.loc[0, "CAR"]) / 4.0) ** 2 +
                         ((nfl_c["rushing_yards"] / nfl_c["games"] - my_avg.loc[0, "RUSH_YDS"]) / 20) ** 2 +
@@ -1691,15 +1744,15 @@ if page == "Trading Card":
                         ((nfl_c["receiving_yards"] / nfl_c["games"] - my_avg.loc[0, "REC_YDS"]) / 18) ** 2 +
                         ((nfl_c["receiving_tds"] / nfl_c["games"] - my_avg.loc[0, "REC_TD"]) / 0.35) ** 2
                     ) ** 0.5
-    
+
                 elif mk == "wrte":
                     for col in ["Targets", "Receptions", "Receiving Yards", "Receiving TDs", "Rushing Yards", "Rushing TDs"]:
                         fg[col] = pd.to_numeric(fg[col], errors="coerce")
-    
+
                     fg["CATCH_PCT"] = (
                         fg["Receptions"] / fg["Targets"].replace(0, pd.NA)
                     ).fillna(0)
-    
+
                     my_avg = pd.DataFrame([{
                         "TGT": fg["Targets"].mean(),
                         "REC": fg["Receptions"].mean(),
@@ -1708,13 +1761,13 @@ if page == "Trading Card":
                         "REC_TD": fg["Receiving TDs"].mean(),
                         "RUSH_YDS": fg["Rushing Yards"].mean()
                     }])
-    
+
                     nfl_c = nfl_players[nfl_players["position"].isin(["WR", "TE"])].copy()
-    
+
                     nfl_c["CATCH_PCT"] = (
                         nfl_c["receptions"] / nfl_c["targets"].replace(0, pd.NA)
                     ).fillna(0)
-    
+
                     nfl_c["DISTANCE"] = (
                         ((nfl_c["targets"] / nfl_c["games"] - my_avg.loc[0, "TGT"]) / 2.5) ** 2 +
                         ((nfl_c["receptions"] / nfl_c["games"] - my_avg.loc[0, "REC"]) / 2.0) ** 2 +
@@ -1723,11 +1776,11 @@ if page == "Trading Card":
                         ((nfl_c["rushing_yards"] / nfl_c["games"] - my_avg.loc[0, "RUSH_YDS"]) / 12) ** 2 +
                         ((nfl_c["CATCH_PCT"] - my_avg.loc[0, "CATCH_PCT"]) / 0.10) ** 2
                     ) ** 0.5
-    
+
                 elif mk == "def":
                     for col in ["Tackles", "Assists", "Sacks", "Interceptions", "Passes Defended", "Forced Fumbles", "Fumble Recoveries"]:
                         fg[col] = pd.to_numeric(fg[col], errors="coerce")
-    
+
                     my_avg = pd.DataFrame([{
                         "TACKLES": fg["Tackles"].mean(),
                         "ASSISTS": fg["Assists"].mean(),
@@ -1737,10 +1790,10 @@ if page == "Trading Card":
                         "FF": fg["Forced Fumbles"].mean(),
                         "FR": fg["Fumble Recoveries"].mean()
                     }])
-    
+
                     def_positions = ["LB", "ILB", "OLB", "MLB", "CB", "S", "SS", "FS", "DB", "DE", "DT", "DL", "EDGE", "SAF", "NT"]
                     nfl_c = nfl_players[nfl_players["position"].isin(def_positions)].copy()
-    
+
                     nfl_c["DISTANCE"] = (
                         ((nfl_c["def_tackles_solo"] / nfl_c["games"] - my_avg.loc[0, "TACKLES"]) / 2.5) ** 2 +
                         ((nfl_c["def_tackle_assists"] / nfl_c["games"] - my_avg.loc[0, "ASSISTS"]) / 1.5) ** 2 +
@@ -1750,15 +1803,14 @@ if page == "Trading Card":
                         ((nfl_c["def_fumbles_forced"] / nfl_c["games"] - my_avg.loc[0, "FF"]) / 0.25) ** 2 +
                         ((nfl_c["def_fumbles"] / nfl_c["games"] - my_avg.loc[0, "FR"]) / 0.25) ** 2
                     ) ** 0.5
-    
+
                 nfl_c = nfl_c[nfl_c["games"] > 0].copy()
                 best = nfl_c.sort_values("DISTANCE").iloc[0]
                 card_pro_match = f"{best['player_name']} ({best['team']})"
-    
+
         except:
             pass
 
-    # ---- Generate button ----
     if st.button("✨ Generate My Trading Card", use_container_width=True):
         if not card_name:
             st.error("Please enter your name.")
@@ -1776,9 +1828,6 @@ if page == "Trading Card":
             status = st.empty()
 
             with st.spinner("🃏 Generating your trading card..."):
-                # -----------------------------
-                # Helpers
-                # -----------------------------
                 def safe_text(value, fallback=""):
                     value = str(value).strip()
                     return value if value else fallback
@@ -1847,9 +1896,6 @@ if page == "Trading Card":
                 photo_bytes = uploaded_photo.read()
                 progress.progress(8)
 
-                # -----------------------------
-                # Step 1: Generate realistic card background
-                # -----------------------------
                 status.info("🎨 Creating card background...")
 
                 team_clean = safe_text(card_team, "professional team")
@@ -1873,9 +1919,6 @@ if page == "Trading Card":
 
                 progress.progress(38)
 
-                # -----------------------------
-                # Step 2: Remove uploaded photo background
-                # -----------------------------
                 status.info("✂️ Cutting out the player photo...")
 
                 user_img = Image.open(BytesIO(photo_bytes)).convert("RGBA")
@@ -1903,9 +1946,6 @@ if page == "Trading Card":
 
                 progress.progress(58)
 
-                # -----------------------------
-                # Step 3: Composite player realistically
-                # -----------------------------
                 status.info("✨ Blending photo into the card...")
 
                 glow = Image.new("RGBA", card_bg.size, (0, 0, 0, 0))
@@ -1929,19 +1969,14 @@ if page == "Trading Card":
 
                 progress.progress(70)
 
-                # -----------------------------
-                # Step 4: Premium card overlay/template
-                # -----------------------------
                 status.info("🏷️ Adding nameplate, stats, and card frame...")
 
                 W, H = card_bg.size
                 draw = ImageDraw.Draw(card_bg)
 
                 panel_top = int(H * 0.735)
-                # font_path = "/System/Library/Fonts/Helvetica.ttc"
                 font_path = "Inter-Regular.ttf"
 
-                # Header band
                 header_overlay = Image.new("RGBA", card_bg.size, (0, 0, 0, 0))
                 hdraw = ImageDraw.Draw(header_overlay)
                 hdraw.rounded_rectangle(
@@ -1966,11 +2001,9 @@ if page == "Trading Card":
                 draw.text((W // 2, 126), header_text, font=header_font,
                           fill=(220, 220, 230), anchor="mm")
 
-                # --- Jersey number badge top-right ---
                 jersey_number_badge(draw, safe_text(card_number, "0"), font_path,
                                     cx=W - 72, cy=72, radius=50)
 
-                # Bottom panel
                 panel = Image.new("RGBA", card_bg.size, (0, 0, 0, 0))
                 pdraw = ImageDraw.Draw(panel)
                 for y in range(panel_top - 22, H):
@@ -1987,7 +2020,6 @@ if page == "Trading Card":
                 card_bg = Image.alpha_composite(card_bg, panel)
                 draw = ImageDraw.Draw(card_bg)
 
-                # Chrome shine
                 shine = Image.new("RGBA", card_bg.size, (0, 0, 0, 0))
                 sdraw = ImageDraw.Draw(shine)
                 sdraw.polygon([(-160, 0), (60, 0), (W - 260, H), (W - 520, H)],
@@ -2002,7 +2034,6 @@ if page == "Trading Card":
                 except:
                     font_path = None
 
-                # Nameplate
                 name_text = safe_text(card_name, "PLAYER").upper()
                 font_name = fit_font(draw, name_text, font_path,
                                      max_width=W - 260, start_size=48, min_size=28)
@@ -2024,7 +2055,6 @@ if page == "Trading Card":
                 draw.text((W // 2, name_y), name_text, font=font_name,
                           fill=(255, 232, 95), anchor="mm")
 
-                # Subtitle
                 subtitle_text = (
                     f"{safe_text(card_position, 'ATHLETE').upper()}  ·  "
                     f"{safe_text(card_team, 'TEAM').upper()}  ·  "
@@ -2038,7 +2068,6 @@ if page == "Trading Card":
 
                 sep_y = panel_top + 117
 
-                # Stats boxes
                 if stat_lines:
                     stats_y_val = sep_y + 58
                     stats_y_label = stats_y_val + 43
@@ -2085,7 +2114,6 @@ if page == "Trading Card":
                         draw.text((x, stats_y_label), label, font=label_font,
                                   fill=(184, 184, 215), anchor="mm")
 
-                    # --- Pro comparison caption ---
                     if card_pro_match:
                         comp_text = f"PLAYS LIKE: {card_pro_match}"
                         comp_font = fit_font(
@@ -2096,9 +2124,9 @@ if page == "Trading Card":
                             start_size=20,
                             min_size=11
                         )
-                    
+
                         comp_y = sub_y + 34
-                    
+
                         draw.text(
                             (W // 2 + 1, comp_y + 1),
                             comp_text,
@@ -2106,7 +2134,7 @@ if page == "Trading Card":
                             fill=(0, 0, 0, 170),
                             anchor="mm"
                         )
-                    
+
                         draw.text(
                             (W // 2, comp_y),
                             comp_text,
@@ -2115,7 +2143,6 @@ if page == "Trading Card":
                             anchor="mm"
                         )
 
-                # Final polish
                 card_bg = add_subtle_noise(card_bg, opacity=14)
                 card_bg = add_vignette(card_bg)
                 draw = ImageDraw.Draw(card_bg)
@@ -2144,3 +2171,1268 @@ if page == "Trading Card":
                 mime="image/png"
             )
             st.success("Card generated!")
+
+
+# Coaches View Page
+if page == "Coaches View":
+    if st.button("⬅ Back to Home"):
+        st.session_state.page = "Home"
+        st.rerun()
+
+    st.title("📋 Coaches View")
+    st.write("A team dashboard for coaches to enter roster stats, compare players, spot trends, and find pro-style player comps.")
+
+    COACH_TABLE_KEY = "coach_roster_games"
+    coach_cols = TABLES["coach_roster_games"]
+    
+    if "coach_roster_games" not in st.session_state:
+        st.session_state.coach_roster_games = load_from_db("coach_roster_games", coach_cols)
+
+    def clean_coach_df(df):
+        df = df.copy()
+        for col in coach_cols:
+            if col not in df.columns:
+                df[col] = pd.NA
+        df = df[coach_cols]
+        if len(df) > 0:
+            df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+            text_cols = ["Sport", "Player", "Position", "Opponent", "Result"]
+            for col in text_cols:
+                df[col] = df[col].fillna("").astype(str)
+            numeric_cols = [c for c in df.columns if c not in text_cols + ["Date"]]
+            for col in numeric_cols:
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        return df
+
+    def coach_summary(df, sport_filter="All"):
+        df = clean_coach_df(df)
+        if sport_filter != "All":
+            df = df[df["Sport"] == sport_filter]
+        if len(df) == 0:
+            return pd.DataFrame()
+
+        rows = []
+        for (sport_name, player, pos), g in df.groupby(["Sport", "Player", "Position"]):
+            games = len(g)
+            row = {"Sport": sport_name, "Player": player, "Position": pos, "Games": games}
+
+            if sport_name == "Basketball":
+                row.update({
+                    "PTS/G": g["Points"].mean(), "REB/G": g["Rebounds"].mean(),
+                    "AST/G": g["Assists"].mean(), "STL/G": g["Steals"].mean(),
+                    "BLK/G": g["Blocks"].mean(), "TOV/G": g["Turnovers"].mean(),
+                    "Impact Score": (
+                        g["Points"].mean() + 1.2 * g["Rebounds"].mean()
+                        + 1.5 * g["Assists"].mean() + 2 * g["Steals"].mean()
+                        + 2 * g["Blocks"].mean() - g["Turnovers"].mean()
+                    )
+                })
+            elif sport_name == "Baseball Hitting":
+                ab = g["At Bats"].sum()
+                hits = g["Hits"].sum()
+                walks = g["Walks"].sum()
+                doubles = g["Doubles"].sum()
+                triples = g["Triples"].sum()
+                hr = g["Home Runs"].sum()
+                singles = max(hits - doubles - triples - hr, 0)
+                total_bases = singles + 2 * doubles + 3 * triples + 4 * hr
+                avg = hits / ab if ab > 0 else 0
+                obp = (hits + walks) / (ab + walks) if (ab + walks) > 0 else 0
+                slg = total_bases / ab if ab > 0 else 0
+                row.update({
+                    "AVG": avg, "OBP": obp, "SLG": slg, "OPS": obp + slg,
+                    "HR": hr, "RBI": g["RBIs"].sum(), "SB": g["Stolen Bases"].sum(),
+                    "Impact Score": (
+                        (obp + slg) * 100 + 2 * hr
+                        + 0.5 * g["RBIs"].sum() + 0.75 * g["Stolen Bases"].sum()
+                    )
+                })
+            elif sport_name == "Baseball Pitching":
+                ip = g["Innings Pitched"].sum()
+                er = g["Earned Runs"].sum()
+                k = g["Strikeouts"].sum()
+                bb = g["Walks"].sum()
+                ha = g["Hits Allowed"].sum()
+                era = er / ip * 9 if ip > 0 else 0
+                whip = (bb + ha) / ip if ip > 0 else 0
+                row.update({
+                    "IP": ip, "ERA": era, "WHIP": whip,
+                    "K/9": k / ip * 9 if ip > 0 else 0,
+                    "BB/9": bb / ip * 9 if ip > 0 else 0,
+                    "Impact Score": (
+                        (k / ip * 9 if ip > 0 else 0) * 8 - era * 4 - whip * 10
+                    )
+                })
+            elif sport_name == "Football":
+                if pos == "QB":
+                    row.update({
+                        "Pass Yds/G": g["Passing Yards"].mean(),
+                        "Pass TD/G": g["Passing TDs"].mean(),
+                        "INT/G": g["Interceptions"].mean(),
+                        "Rush Yds/G": g["Rushing Yards"].mean(),
+                        "Cmp %": (
+                            g["Completions"].sum() / g["Attempts"].sum() * 100
+                            if g["Attempts"].sum() > 0 else 0
+                        ),
+                        "Impact Score": (
+                            g["Passing Yards"].mean() / 10
+                            + 6 * g["Passing TDs"].mean()
+                            - 4 * g["Interceptions"].mean()
+                            + g["Rushing Yards"].mean() / 10
+                            + 6 * g["Rushing TDs"].mean()
+                        )
+                    })
+                elif pos == "RB":
+                    row.update({
+                        "Rush Yds/G": g["Rushing Yards"].mean(),
+                        "Rush TD/G": g["Rushing TDs"].mean(),
+                        "Rec/G": g["Receptions"].mean(),
+                        "Rec Yds/G": g["Receiving Yards"].mean(),
+                        "Impact Score": (
+                            g["Rushing Yards"].mean() / 10
+                            + g["Receiving Yards"].mean() / 10
+                            + 6 * g["Rushing TDs"].mean()
+                            + 6 * g["Receiving TDs"].mean()
+                        )
+                    })
+                elif pos in ["WR", "TE", "WR/TE"]:
+                    catch_pct = (
+                        g["Receptions"].sum() / g["Targets"].sum() * 100
+                        if g["Targets"].sum() > 0 else 0
+                    )
+                    row.update({
+                        "Targets/G": g["Targets"].mean(),
+                        "Rec/G": g["Receptions"].mean(),
+                        "Rec Yds/G": g["Receiving Yards"].mean(),
+                        "Rec TD/G": g["Receiving TDs"].mean(),
+                        "Catch %": catch_pct,
+                        "Impact Score": (
+                            g["Receiving Yards"].mean() / 10
+                            + 6 * g["Receiving TDs"].mean()
+                            + catch_pct * 8
+                        )
+                    })
+                else:
+                    row.update({
+                        "Tackles/G": g["Tackles"].mean(),
+                        "Sacks/G": g["Sacks"].mean(),
+                        "INT/G": g["Interceptions"].mean(),
+                        "PD/G": g["Passes Defended"].mean(),
+                        "FF/G": g["Forced Fumbles"].mean(),
+                        "Impact Score": (
+                            g["Tackles"].mean() + 4 * g["Sacks"].mean()
+                            + 5 * g["Interceptions"].mean()
+                            + 2 * g["Passes Defended"].mean()
+                            + 4 * g["Forced Fumbles"].mean()
+                        )
+                    })
+            rows.append(row)
+
+        out = pd.DataFrame(rows).fillna(0)
+        numeric_cols = out.select_dtypes(include="number").columns
+        out[numeric_cols] = out[numeric_cols].round(3)
+        return out.sort_values("Impact Score", ascending=False).reset_index(drop=True)
+
+    def get_impact_score_explanation(sport_name):
+        if sport_name == "Basketball":
+            return "**Basketball Impact Score** — `PTS/G + 1.2×REB/G + 1.5×AST/G + 2×STL/G + 2×BLK/G - TOV/G`"
+        elif sport_name == "Baseball Hitting":
+            return "**Baseball Hitting Impact Score** — `(OPS × 100) + 2×HR + 0.5×RBI + 0.75×SB`"
+        elif sport_name == "Baseball Pitching":
+            return "**Baseball Pitching Impact Score** — `(K/9 × 8) - (ERA × 4) - (WHIP × 10)`"
+        elif sport_name == "Football":
+            return (
+                "**Football Impact Score by position:** "
+                "QB: `Pass Yds/G÷10 + 6×Pass TD/G - 4×INT/G + Rush Yds/G÷10 + 6×Rush TD/G` | "
+                "RB: `Rush Yds/G÷10 + Rec Yds/G÷10 + 6×Rush TD/G + 6×Rec TD/G` | "
+                "WR/TE: `Rec Yds/G÷10 + 6×Rec TD/G + Catch%×8` | "
+                "Defense: `Tackles/G + 4×Sacks/G + 5×INT/G + 2×PD/G + 4×FF/G`"
+            )
+        return "Impact Score is a custom summary metric based on each sport's key stats."
+
+    def get_selected_player_profile(summary_df, player_name):
+        row = summary_df[summary_df["Player"] == player_name]
+        return None if len(row) == 0 else row.iloc[0]
+
+    def find_coach_player_comp(profile, nba_season="2025-26", mlb_year=2025, nfl_season=2025):
+        try:
+            sport_name = profile["Sport"]
+            pos = profile["Position"]
+
+            if sport_name == "Basketball":
+                pros = load_player_data(nba_season)
+                pros = pros[(pros["GP"] >= 20) & (pros["MIN"] >= 10)].copy()
+                pros["DISTANCE"] = (
+                    ((pros["PTS"] - profile.get("PTS/G", 0)) / 6) ** 2 +
+                    ((pros["REB"] - profile.get("REB/G", 0)) / 3) ** 2 +
+                    ((pros["AST"] - profile.get("AST/G", 0)) / 3) ** 2 +
+                    ((pros["STL"] - profile.get("STL/G", 0)) / 1) ** 2 +
+                    ((pros["BLK"] - profile.get("BLK/G", 0)) / 1) ** 2 +
+                    ((pros["TOV"] - profile.get("TOV/G", 0)) / 2) ** 2
+                ) ** 0.5
+                pros["Similarity Score"] = (1 / (1 + pros["DISTANCE"])).round(3)
+                return pros.sort_values("DISTANCE").head(5)[
+                    ["PLAYER_NAME", "TEAM_ABBREVIATION", "PTS", "REB", "AST", "Similarity Score"]
+                ].rename(columns={"PLAYER_NAME": "Comp", "TEAM_ABBREVIATION": "Team"})
+
+            if sport_name == "Baseball Hitting":
+                pros = load_mlb_batting_data(mlb_year).copy()
+                pros["DISTANCE"] = (
+                    ((pros["AVG"] - profile.get("AVG", 0)) / .035) ** 2 +
+                    ((pros["OBP"] - profile.get("OBP", 0)) / .045) ** 2 +
+                    ((pros["SLG"] - profile.get("SLG", 0)) / .070) ** 2 +
+                    ((pros["OPS"] - profile.get("OPS", 0)) / .100) ** 2
+                ) ** 0.5
+                pros["Similarity Score"] = (1 / (1 + pros["DISTANCE"])).round(3)
+                return pros.sort_values("DISTANCE").head(5)[
+                    ["Name", "Team", "AVG", "OBP", "SLG", "OPS", "Similarity Score"]
+                ].rename(columns={"Name": "Comp"})
+
+            if sport_name == "Baseball Pitching":
+                pros = load_mlb_pitching_data(mlb_year).copy()
+                pros["DISTANCE"] = (
+                    ((pros["ERA"] - profile.get("ERA", 0)) / 1.0) ** 2 +
+                    ((pros["WHIP"] - profile.get("WHIP", 0)) / .25) ** 2 +
+                    ((pros["K_PER_9"] - profile.get("K/9", 0)) / 2.5) ** 2 +
+                    ((pros["BB_PER_9"] - profile.get("BB/9", 0)) / 1.5) ** 2
+                ) ** 0.5
+                pros["Similarity Score"] = (1 / (1 + pros["DISTANCE"])).round(3)
+                return pros.sort_values("DISTANCE").head(5)[
+                    ["Name", "Team", "ERA", "WHIP", "K_PER_9", "BB_PER_9", "Similarity Score"]
+                ].rename(columns={"Name": "Comp"})
+
+            if sport_name == "Football":
+                pros = load_nfl_player_data(nfl_season).copy()
+                if pos == "QB":
+                    pros = pros[pros["position"] == "QB"].copy()
+                    pros["DISTANCE"] = (
+                        ((pros["passing_yards"] / pros["games"] - profile.get("Pass Yds/G", 0)) / 45) ** 2 +
+                        ((pros["passing_tds"] / pros["games"] - profile.get("Pass TD/G", 0)) / .9) ** 2 +
+                        ((pros["passing_interceptions"] / pros["games"] - profile.get("INT/G", 0)) / .6) ** 2
+                    ) ** 0.5
+                elif pos == "RB":
+                    pros = pros[pros["position"] == "RB"].copy()
+                    pros["DISTANCE"] = (
+                        ((pros["rushing_yards"] / pros["games"] - profile.get("Rush Yds/G", 0)) / 20) ** 2 +
+                        ((pros["rushing_tds"] / pros["games"] - profile.get("Rush TD/G", 0)) / .5) ** 2 +
+                        ((pros["receiving_yards"] / pros["games"] - profile.get("Rec Yds/G", 0)) / 18) ** 2
+                    ) ** 0.5
+                elif pos in ["WR", "TE", "WR/TE"]:
+                    pros = pros[pros["position"].isin(["WR", "TE"])].copy()
+                    pros["DISTANCE"] = (
+                        ((pros["targets"] / pros["games"] - profile.get("Targets/G", 0)) / 2.5) ** 2 +
+                        ((pros["receptions"] / pros["games"] - profile.get("Rec/G", 0)) / 2) ** 2 +
+                        ((pros["receiving_yards"] / pros["games"] - profile.get("Rec Yds/G", 0)) / 20) ** 2
+                    ) ** 0.5
+                else:
+                    pros = pros[pros["position"].isin([
+                        "LB", "ILB", "OLB", "MLB", "CB", "S", "SS", "FS",
+                        "DB", "DE", "DT", "DL", "EDGE", "SAF", "NT"
+                    ])].copy()
+                    pros["DISTANCE"] = (
+                        ((pros["def_tackles_solo"] / pros["games"] - profile.get("Tackles/G", 0)) / 2.5) ** 2 +
+                        ((pros["def_sacks"] / pros["games"] - profile.get("Sacks/G", 0)) / .5) ** 2 +
+                        ((pros["def_interceptions"] / pros["games"] - profile.get("INT/G", 0)) / .3) ** 2
+                    ) ** 0.5
+                pros = pros[pros["games"] > 0].copy()
+                pros["Similarity Score"] = (1 / (1 + pros["DISTANCE"])).round(3)
+                return pros.sort_values("DISTANCE").head(5)[
+                    ["player_name", "team", "position", "games", "Similarity Score"]
+                ].rename(columns={"player_name": "Comp", "team": "Team", "position": "Position"})
+
+        except Exception as e:
+            st.warning(f"Could not load pro comps right now: {e}")
+        return pd.DataFrame()
+
+    # -----------------------------------------------------------------------
+    # SPORT / POSITION CONFIG — single source of truth
+    # -----------------------------------------------------------------------
+
+    SPORT_POSITIONS = {
+        "Basketball":        ["PG", "SG", "SF", "PF", "C", "G", "Wing", "F"],
+        "Baseball Hitting":  ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"],
+        "Baseball Pitching": ["SP", "RP", "CL"],
+        "Football":          ["QB", "RB", "FB", "WR", "TE",
+                              "OT", "OG", "C",
+                              "DE", "DT", "LB", "CB", "S", "K", "P"],
+    }
+
+    # Football positions grouped by stat profile they share
+    FB_SKILL   = {"QB"}
+    FB_RB      = {"RB", "FB"}
+    FB_WRTE    = {"WR", "TE"}
+    FB_LINE_O  = {"OT", "OG", "C"}      # offensive line — no tracked stats, generic note
+    FB_DEF     = {"DE", "DT", "LB", "CB", "S"}
+    FB_SPEC    = {"K", "P"}             # kickers/punters — minimal stats
+
+    def fb_stat_group(pos):
+        if pos in FB_SKILL:   return "QB"
+        if pos in FB_RB:      return "RB"
+        if pos in FB_WRTE:    return "WRTE"
+        if pos in FB_LINE_O:  return "OL"
+        if pos in FB_DEF:     return "DEF"
+        if pos in FB_SPEC:    return "SPEC"
+        return "DEF"
+
+    # -----------------------------------------------------------------------
+    # TABS
+    # -----------------------------------------------------------------------
+    
+    single_entry_tab, team_entry_tab, dashboard_tab, comps_tab, depth_chart_tab = st.tabs([
+    "➕ Single Player Entry",
+    "👥 Team Game Entry",
+    "📊 Team Dashboard",
+    "🧬 Player Comps",
+    "🧩 Depth Chart",
+    ])
+
+    # ===================================================================
+    # ROSTER TAB
+    # ===================================================================
+    with single_entry_tab:
+        st.subheader("Add a Roster Game")
+        st.caption("Log one player's performance per submission.")
+
+        # --- Sport selector OUTSIDE the form so position list reacts ---
+        c_sport = st.selectbox(
+            "Sport",
+            list(SPORT_POSITIONS.keys()),
+            key="coach_sport_outer",
+        )
+
+        pos_options = SPORT_POSITIONS[c_sport]
+
+        c_position = st.selectbox(
+            "Position",
+            pos_options,
+            key="coach_position_outer",
+        )
+
+        # Determine which stat block to show for football
+        fb_group = fb_stat_group(c_position) if c_sport == "Football" else None
+
+        # Show a small note for positions we don't track detailed stats for
+        if c_sport == "Football" and fb_group in ("OL", "SPEC"):
+            st.info(
+                f"{'Offensive linemen' if fb_group == 'OL' else 'Kickers/Punters'} don't have "
+                "per-game skill stats tracked in this system. You can still log the game and "
+                "use the player for roster/depth-chart purposes."
+            )
+
+        # --- Rest of the form ---
+        with st.form("coach_roster_form"):
+
+            fi1, fi2, fi3, fi4 = st.columns(4)
+            with fi1:
+                c_player = st.text_input("Player Name", key="coach_player_name")
+            with fi2:
+                c_opp = st.text_input("Opponent", key="coach_opp")
+            with fi3:
+                c_date = st.date_input("Game Date", key="coach_date")
+            with fi4:
+                c_result = st.selectbox("Result", ["", "W", "L", "ND"], key="coach_result")
+
+            fs1, fs2 = st.columns(2)
+            with fs1:
+                c_team_score = st.number_input("Team Score", min_value=0, step=1, key="coach_team_score")
+            with fs2:
+                c_opp_score = st.number_input("Opponent Score", min_value=0, step=1, key="coach_opp_score")
+
+            # Base row — all stat columns zeroed
+            new_row = {col: 0 for col in coach_cols}
+            new_row.update({
+                "Sport": c_sport,
+                "Player": c_player,
+                "Position": c_position,
+                "Date": pd.to_datetime(c_date),
+                "Opponent": c_opp,
+                "Team Score": c_team_score,
+                "Opponent Score": c_opp_score,
+                "Result": c_result,
+            })
+
+            st.markdown("---")
+
+            # ---- BASKETBALL ------------------------------------------------
+            if c_sport == "Basketball":
+                st.markdown("**Counting Stats**")
+                b1, b2, b3 = st.columns(3)
+                with b1:
+                    new_row["Points"]    = st.number_input("Points",    min_value=0, step=1, key="c_pts")
+                    new_row["Rebounds"]  = st.number_input("Rebounds",  min_value=0, step=1, key="c_reb")
+                with b2:
+                    new_row["Assists"]   = st.number_input("Assists",   min_value=0, step=1, key="c_ast")
+                    new_row["Steals"]    = st.number_input("Steals",    min_value=0, step=1, key="c_stl")
+                with b3:
+                    new_row["Blocks"]    = st.number_input("Blocks",    min_value=0, step=1, key="c_blk")
+                    new_row["Turnovers"] = st.number_input("Turnovers", min_value=0, step=1, key="c_tov")
+
+            # ---- BASEBALL HITTING ------------------------------------------
+            elif c_sport == "Baseball Hitting":
+                st.markdown("**Hitting Stats**")
+                h1, h2, h3, h4 = st.columns(4)
+                with h1:
+                    new_row["At Bats"]  = st.number_input("At Bats",  min_value=0, step=1, key="c_ab")
+                    new_row["Hits"]     = st.number_input("Hits",     min_value=0, step=1, key="c_hits")
+                with h2:
+                    new_row["Runs"]     = st.number_input("Runs",     min_value=0, step=1, key="c_runs")
+                    new_row["RBIs"]     = st.number_input("RBIs",     min_value=0, step=1, key="c_rbis")
+                with h3:
+                    new_row["Walks"]      = st.number_input("Walks",      min_value=0, step=1, key="c_walks")
+                    new_row["Strikeouts"] = st.number_input("Strikeouts", min_value=0, step=1, key="c_ks_hit")
+                with h4:
+                    new_row["Doubles"]      = st.number_input("Doubles",      min_value=0, step=1, key="c_2b")
+                    new_row["Triples"]      = st.number_input("Triples",      min_value=0, step=1, key="c_3b")
+                    new_row["Home Runs"]    = st.number_input("Home Runs",    min_value=0, step=1, key="c_hr")
+                    new_row["Stolen Bases"] = st.number_input("Stolen Bases", min_value=0, step=1, key="c_sb")
+
+            # ---- BASEBALL PITCHING -----------------------------------------
+            elif c_sport == "Baseball Pitching":
+                st.markdown("**Pitching Stats**")
+                p1, p2, p3, p4 = st.columns(4)
+                with p1:
+                    new_row["Innings Pitched"] = st.number_input("Innings Pitched", min_value=0.0, step=0.1, format="%.1f", key="c_ip")
+                    new_row["Strikeouts"]      = st.number_input("Strikeouts",      min_value=0, step=1, key="c_k_p")
+                with p2:
+                    new_row["Walks"]       = st.number_input("Walks",        min_value=0, step=1, key="c_bb_p")
+                    new_row["Hits Allowed"] = st.number_input("Hits Allowed", min_value=0, step=1, key="c_ha")
+                with p3:
+                    new_row["Earned Runs"]       = st.number_input("Earned Runs",       min_value=0, step=1, key="c_er")
+                    new_row["Home Runs Allowed"] = st.number_input("Home Runs Allowed", min_value=0, step=1, key="c_hra")
+                with p4:
+                    new_row["Pitches Thrown"] = st.number_input("Pitches Thrown", min_value=0, step=1, key="c_pitches")
+
+            # ---- FOOTBALL --------------------------------------------------
+            elif c_sport == "Football":
+
+                if fb_group == "QB":
+                    st.markdown("**QB Stats**")
+                    f1, f2, f3 = st.columns(3)
+                    with f1:
+                        new_row["Completions"] = st.number_input("Completions", min_value=0, step=1, key="c_cmp")
+                        new_row["Attempts"]    = st.number_input("Attempts",    min_value=0, step=1, key="c_att")
+                    with f2:
+                        new_row["Passing Yards"] = st.number_input("Passing Yards", min_value=0, step=1, key="c_pass_yds")
+                        new_row["Passing TDs"]   = st.number_input("Passing TDs",   min_value=0, step=1, key="c_pass_td")
+                        new_row["Interceptions"] = st.number_input("Interceptions", min_value=0, step=1, key="c_int_qb")
+                    with f3:
+                        new_row["Rushing Yards"] = st.number_input("Rushing Yards", min_value=0, step=1, key="c_qb_rush")
+                        new_row["Rushing TDs"]   = st.number_input("Rushing TDs",   min_value=0, step=1, key="c_qb_rtd")
+
+                elif fb_group == "RB":
+                    st.markdown("**RB / FB Stats**")
+                    f1, f2, f3 = st.columns(3)
+                    with f1:
+                        new_row["Carries"]      = st.number_input("Carries",      min_value=0, step=1, key="c_car")
+                        new_row["Rushing Yards"] = st.number_input("Rushing Yards", min_value=0, step=1, key="c_rb_rush")
+                    with f2:
+                        new_row["Rushing TDs"]  = st.number_input("Rushing TDs",  min_value=0, step=1, key="c_rb_rtd")
+                        new_row["Receptions"]   = st.number_input("Receptions",   min_value=0, step=1, key="c_rb_rec")
+                    with f3:
+                        new_row["Receiving Yards"] = st.number_input("Receiving Yards", min_value=0, step=1, key="c_rb_ryds")
+                        new_row["Receiving TDs"]   = st.number_input("Receiving TDs",   min_value=0, step=1, key="c_rb_rtds")
+
+                elif fb_group == "WRTE":
+                    st.markdown(f"**{c_position} Stats**")
+                    f1, f2, f3 = st.columns(3)
+                    with f1:
+                        new_row["Targets"]    = st.number_input("Targets",    min_value=0, step=1, key="c_tgt")
+                        new_row["Receptions"] = st.number_input("Receptions", min_value=0, step=1, key="c_wr_rec")
+                    with f2:
+                        new_row["Receiving Yards"] = st.number_input("Receiving Yards", min_value=0, step=1, key="c_wr_yds")
+                        new_row["Receiving TDs"]   = st.number_input("Receiving TDs",   min_value=0, step=1, key="c_wr_td")
+                    with f3:
+                        new_row["Rushing Yards"] = st.number_input("Rushing Yards", min_value=0, step=1, key="c_wr_rush")
+                        new_row["Rushing TDs"]   = st.number_input("Rushing TDs",   min_value=0, step=1, key="c_wr_rtd")
+
+                elif fb_group == "DEF":
+                    st.markdown(f"**{c_position} Defensive Stats**")
+                    f1, f2, f3 = st.columns(3)
+                    with f1:
+                        new_row["Tackles"]   = st.number_input("Tackles",   min_value=0,   step=1,   key="c_tackles")
+                        new_row["Assists_FB"] = st.number_input("Assists",   min_value=0,   step=1,   key="c_assists_fb")
+                    with f2:
+                        new_row["Sacks"]         = st.number_input("Sacks",         min_value=0.0, step=0.5, key="c_sacks")
+                        new_row["Interceptions"] = st.number_input("Interceptions", min_value=0,   step=1,   key="c_def_int")
+                    with f3:
+                        new_row["Passes Defended"]   = st.number_input("Passes Defended",   min_value=0, step=1, key="c_pd")
+                        new_row["Forced Fumbles"]    = st.number_input("Forced Fumbles",    min_value=0, step=1, key="c_ff")
+                        new_row["Fumble Recoveries"] = st.number_input("Fumble Recoveries", min_value=0, step=1, key="c_fr")
+
+                elif fb_group == "OL":
+                    st.info("No per-game skill stats are tracked for offensive linemen.")
+
+                elif fb_group == "SPEC":
+                    st.markdown(f"**{c_position} Stats**")
+                    new_row["Pitches Thrown"] = 0   # placeholder so row still saves cleanly
+                    st.info("Kicker / Punter detailed stats are not tracked yet. The game will still be logged.")
+
+            submitted = st.form_submit_button("Add Player Game to Roster")
+            if submitted:
+                error = False
+                if not c_player.strip() or not c_opp.strip():
+                    st.error("Please enter both a player name and an opponent.")
+                    error = True
+                elif c_sport == "Baseball Hitting" and new_row["Hits"] > new_row["At Bats"]:
+                    st.error("Hits cannot exceed At Bats.")
+                    error = True
+                elif c_sport == "Football" and fb_group == "QB" and new_row["Completions"] > new_row["Attempts"]:
+                    st.error("Completions cannot exceed Attempts.")
+                    error = True
+                elif c_sport == "Football" and fb_group == "WRTE" and new_row["Receptions"] > new_row["Targets"]:
+                    st.error("Receptions cannot exceed Targets.")
+                    error = True
+
+                if not error:
+                    st.session_state.coach_roster_games = pd.concat(
+                        [st.session_state.coach_roster_games, pd.DataFrame([new_row])],
+                        ignore_index=True,
+                    )
+                    save_to_db("coach_roster_games", st.session_state.coach_roster_games)
+                    st.success(f"✅ Added game for {c_player}.")
+
+        # --- Raw game log ---
+        st.subheader("Raw Roster Game Log")
+        coach_df = clean_coach_df(st.session_state.coach_roster_games)
+
+        if len(coach_df) == 0:
+            st.info("No roster games logged yet.")
+        else:
+            log_sport_filter = st.selectbox(
+                "View game log for sport",
+                sorted(coach_df["Sport"].dropna().unique().tolist()),
+                key="coach_log_sport_filter",
+            )
+            display_log = coach_df[coach_df["Sport"] == log_sport_filter].copy()
+            display_log["Date"] = display_log["Date"].dt.strftime("%Y-%m-%d")
+
+            base_cols = ["Sport", "Player", "Position", "Date", "Opponent",
+                         "Team Score", "Opponent Score", "Result"]
+
+            sport_stat_cols = {
+                "Basketball":        ["Points", "Rebounds", "Assists", "Steals", "Blocks", "Turnovers"],
+                "Baseball Hitting":  ["At Bats", "Hits", "Runs", "RBIs", "Walks", "Strikeouts",
+                                      "Doubles", "Triples", "Home Runs", "Stolen Bases"],
+                "Baseball Pitching": ["Innings Pitched", "Strikeouts", "Walks", "Hits Allowed",
+                                      "Earned Runs", "Home Runs Allowed", "Pitches Thrown"],
+                "Football":          ["Completions", "Attempts", "Passing Yards", "Passing TDs",
+                                      "Interceptions", "Carries", "Rushing Yards", "Rushing TDs",
+                                      "Targets", "Receptions", "Receiving Yards", "Receiving TDs",
+                                      "Tackles", "Assists_FB", "Sacks", "Passes Defended",
+                                      "Forced Fumbles", "Fumble Recoveries"],
+            }
+
+            visible_cols = [c for c in base_cols + sport_stat_cols.get(log_sport_filter, [])
+                            if c in display_log.columns]
+
+            st.dataframe(
+                display_log[visible_cols].sort_values(["Date", "Player"], ascending=[False, True]),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            csv = display_log[visible_cols].to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "⬇️ Download Game Log CSV",
+                data=csv,
+                file_name=f"{log_sport_filter.lower().replace(' ', '_')}_roster_log.csv",
+                mime="text/csv",
+            )
+
+            delete_labels = (
+                display_log.index.astype(str) + " | "
+                + display_log["Date"].astype(str) + " | "
+                + display_log["Player"] + " vs " + display_log["Opponent"]
+                + " | " + display_log["Sport"]
+            )
+            del_choice = st.selectbox(
+                "Delete a roster game",
+                options=display_log.index,
+                format_func=lambda i: delete_labels.loc[i],
+                key="coach_delete_game",
+            )
+            if st.button("Delete Selected Roster Game"):
+                st.session_state.coach_roster_games = (
+                    st.session_state.coach_roster_games
+                    .drop(st.session_state.coach_roster_games.index[del_choice])
+                    .reset_index(drop=True)
+                )
+                save_to_db("coach_roster_games", st.session_state.coach_roster_games)
+                st.success("Roster game deleted.")
+                st.rerun()
+
+
+    with team_entry_tab:
+        st.subheader("👥 Team Game Entry")
+        st.caption("Enter one game's info once, then fill in stats for multiple players at the same time.")
+
+        if "team_game_save_confirmation" in st.session_state:
+            conf = st.session_state.pop("team_game_save_confirmation")
+            st.success(
+                f"✅ Saved {conf['count']} player stat lines for "
+                f"{conf['sport']} vs {conf['opponent']} on {conf['date']}."
+            )
+    
+        # =====================================================
+        # GAME INFO
+        # =====================================================
+    
+        team_sport = st.selectbox(
+            "Sport",
+            ["Basketball", "Baseball", "Football"],
+            key="team_entry_sport"
+        )
+    
+        gi1, gi2, gi3, gi4 = st.columns(4)
+    
+        with gi1:
+            team_date = st.date_input("Game Date", key="team_entry_date")
+    
+        with gi2:
+            team_opp = st.text_input("Opponent", key="team_entry_opp")
+    
+        with gi3:
+            team_result = st.selectbox(
+                "Result",
+                ["", "W", "L", "T", "ND"],
+                key="team_entry_result"
+            )
+    
+        with gi4:
+            num_players = st.number_input(
+                "Rows Per Table",
+                min_value=1,
+                max_value=40,
+                value=5,
+                step=1
+            )
+    
+        gs1, gs2 = st.columns(2)
+    
+        with gs1:
+            team_score = st.number_input(
+                "Team Score",
+                min_value=0,
+                step=1,
+                key="team_entry_score"
+            )
+    
+        with gs2:
+            opp_score = st.number_input(
+                "Opponent Score",
+                min_value=0,
+                step=1,
+                key="team_entry_opp_score"
+            )
+    
+        # =====================================================
+        # HELPERS
+        # =====================================================
+    
+        def make_editor_df(columns, rows=num_players):
+            df = pd.DataFrame([{c: 0 for c in columns} for _ in range(rows)])
+    
+            if "Player" in df.columns:
+                df["Player"] = ""
+    
+            return df
+    
+        def process_editor_rows(editor_df, sport_name):
+            rows = []
+    
+            for _, row in editor_df.iterrows():
+    
+                player_name = str(row.get("Player", "")).strip()
+    
+                if player_name == "":
+                    continue
+    
+                new_row = {col: 0 for col in coach_cols}
+    
+                new_row.update({
+                    "Sport": sport_name,
+                    "Player": player_name,
+                    "Position": row.get("Position", ""),
+                    "Date": pd.to_datetime(team_date),
+                    "Opponent": team_opp,
+                    "Team Score": team_score,
+                    "Opponent Score": opp_score,
+                    "Result": team_result,
+                })
+    
+                for col in editor_df.columns:
+    
+                    if col in [
+                        "Player",
+                        "Position"
+                    ]:
+                        continue
+    
+                    val = pd.to_numeric(row[col], errors="coerce")
+    
+                    if pd.isna(val):
+                        val = 0
+    
+                    new_row[col] = val
+    
+                rows.append(new_row)
+    
+            return rows
+    
+        # =====================================================
+        # BASKETBALL
+        # =====================================================
+    
+        all_rows_to_add = []
+    
+        if team_sport == "Basketball":
+    
+            st.markdown("### Basketball Team Stats")
+    
+            basketball_cols = [
+                "Player",
+                "Position",
+                "Points",
+                "Rebounds",
+                "Assists",
+                "Steals",
+                "Blocks",
+                "Turnovers"
+            ]
+    
+            basketball_df = make_editor_df(basketball_cols)
+    
+            basketball_df["Position"] = SPORT_POSITIONS["Basketball"][0]
+    
+            basketball_editor = st.data_editor(
+                basketball_df,
+                use_container_width=True,
+                hide_index=True,
+                num_rows="dynamic",
+                column_config={
+                    "Position": st.column_config.SelectboxColumn(
+                        "Position",
+                        options=SPORT_POSITIONS["Basketball"],
+                        required=True
+                    )
+                },
+                key="basketball_team_editor"
+            )
+    
+            all_rows_to_add.extend(
+                process_editor_rows(basketball_editor, "Basketball")
+            )
+    
+        # =====================================================
+        # BASEBALL
+        # =====================================================
+    
+        elif team_sport == "Baseball":
+    
+            hitting_tab, pitching_tab = st.tabs([
+                "⚾ Hitters",
+                "🔥 Pitchers"
+            ])
+    
+            # ----------------------------
+            # HITTING
+            # ----------------------------
+    
+            with hitting_tab:
+    
+                st.markdown("### Hitting Stats")
+    
+                hitting_cols = [
+                    "Player",
+                    "Position",
+                    "At Bats",
+                    "Hits",
+                    "Runs",
+                    "RBIs",
+                    "Walks",
+                    "Strikeouts",
+                    "Doubles",
+                    "Triples",
+                    "Home Runs",
+                    "Stolen Bases"
+                ]
+    
+                hitting_df = make_editor_df(hitting_cols)
+    
+                hitting_df["Position"] = SPORT_POSITIONS["Baseball Hitting"][0]
+    
+                hitting_editor = st.data_editor(
+                    hitting_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Position": st.column_config.SelectboxColumn(
+                            "Position",
+                            options=SPORT_POSITIONS["Baseball Hitting"],
+                            required=True
+                        )
+                    },
+                    key="baseball_hitting_editor"
+                )
+    
+            # ----------------------------
+            # PITCHING
+            # ----------------------------
+    
+            with pitching_tab:
+    
+                st.markdown("### Pitching Stats")
+    
+                pitching_cols = [
+                    "Player",
+                    "Position",
+                    "Innings Pitched",
+                    "Strikeouts",
+                    "Walks",
+                    "Hits Allowed",
+                    "Earned Runs",
+                    "Home Runs Allowed",
+                    "Pitches Thrown"
+                ]
+    
+                pitching_df = make_editor_df(pitching_cols)
+    
+                pitching_df["Position"] = SPORT_POSITIONS["Baseball Pitching"][0]
+    
+                pitching_editor = st.data_editor(
+                    pitching_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Position": st.column_config.SelectboxColumn(
+                            "Position",
+                            options=SPORT_POSITIONS["Baseball Pitching"],
+                            required=True
+                        )
+                    },
+                    key="baseball_pitching_editor"
+                )
+    
+            all_rows_to_add.extend(
+                process_editor_rows(hitting_editor, "Baseball Hitting")
+            )
+    
+            all_rows_to_add.extend(
+                process_editor_rows(pitching_editor, "Baseball Pitching")
+            )
+    
+        # =====================================================
+        # FOOTBALL
+        # =====================================================
+    
+        elif team_sport == "Football":
+    
+            qb_tab, rb_tab, wr_tab, defense_tab = st.tabs([
+                "🏈 QB",
+                "💨 RB/FB",
+                "🎯 WR/TE",
+                "🛡 Defense"
+            ])
+    
+            # ----------------------------
+            # QB
+            # ----------------------------
+    
+            with qb_tab:
+    
+                qb_cols = [
+                    "Player",
+                    "Position",
+                    "Completions",
+                    "Attempts",
+                    "Passing Yards",
+                    "Passing TDs",
+                    "Interceptions",
+                    "Rushing Yards",
+                    "Rushing TDs"
+                ]
+    
+                qb_df = make_editor_df(qb_cols)
+    
+                qb_df["Position"] = "QB"
+    
+                qb_editor = st.data_editor(
+                    qb_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Position": st.column_config.SelectboxColumn(
+                            "Position",
+                            options=["QB"],
+                            required=True
+                        )
+                    },
+                    key="football_qb_editor"
+                )
+    
+            # ----------------------------
+            # RB
+            # ----------------------------
+    
+            with rb_tab:
+    
+                rb_cols = [
+                    "Player",
+                    "Position",
+                    "Carries",
+                    "Rushing Yards",
+                    "Rushing TDs",
+                    "Receptions",
+                    "Receiving Yards",
+                    "Receiving TDs"
+                ]
+    
+                rb_df = make_editor_df(rb_cols)
+    
+                rb_df["Position"] = "RB"
+    
+                rb_editor = st.data_editor(
+                    rb_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Position": st.column_config.SelectboxColumn(
+                            "Position",
+                            options=["RB", "FB"],
+                            required=True
+                        )
+                    },
+                    key="football_rb_editor"
+                )
+    
+            # ----------------------------
+            # WR/TE
+            # ----------------------------
+    
+            with wr_tab:
+    
+                wr_cols = [
+                    "Player",
+                    "Position",
+                    "Targets",
+                    "Receptions",
+                    "Receiving Yards",
+                    "Receiving TDs",
+                    "Rushing Yards",
+                    "Rushing TDs"
+                ]
+    
+                wr_df = make_editor_df(wr_cols)
+    
+                wr_df["Position"] = "WR"
+    
+                wr_editor = st.data_editor(
+                    wr_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Position": st.column_config.SelectboxColumn(
+                            "Position",
+                            options=["WR", "TE"],
+                            required=True
+                        )
+                    },
+                    key="football_wr_editor"
+                )
+    
+            # ----------------------------
+            # DEFENSE
+            # ----------------------------
+    
+            with defense_tab:
+    
+                defense_cols = [
+                    "Player",
+                    "Position",
+                    "Tackles",
+                    "Assists_FB",
+                    "Sacks",
+                    "Interceptions",
+                    "Passes Defended",
+                    "Forced Fumbles",
+                    "Fumble Recoveries"
+                ]
+    
+                defense_df = make_editor_df(defense_cols)
+    
+                defense_df["Position"] = "LB"
+    
+                defense_editor = st.data_editor(
+                    defense_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Position": st.column_config.SelectboxColumn(
+                            "Position",
+                            options=[p for p in SPORT_POSITIONS["Football"] if p in ["DE", "DT", "LB", "CB", "S"]],
+                            required=True
+                        )
+                    },
+                    key="football_defense_editor"
+                )
+    
+            all_rows_to_add.extend(
+                process_editor_rows(qb_editor, "Football")
+            )
+    
+            all_rows_to_add.extend(
+                process_editor_rows(rb_editor, "Football")
+            )
+    
+            all_rows_to_add.extend(
+                process_editor_rows(wr_editor, "Football")
+            )
+    
+            all_rows_to_add.extend(
+                process_editor_rows(defense_editor, "Football")
+            )
+    
+        # =====================================================
+        # SAVE BUTTON
+        # =====================================================
+    
+        st.divider()
+    
+        if st.button("💾 Save Team Game", use_container_width=True):
+    
+            if team_opp.strip() == "":
+                st.error("Please enter an opponent.")
+    
+            elif len(all_rows_to_add) == 0:
+                st.error("Please enter at least one player stat line.")
+    
+            else:
+    
+                st.session_state[COACH_TABLE_KEY] = pd.concat(
+                    [
+                        st.session_state[COACH_TABLE_KEY],
+                        pd.DataFrame(all_rows_to_add)
+                    ],
+                    ignore_index=True
+                )
+    
+                save_to_db(
+                    COACH_TABLE_KEY,
+                    st.session_state[COACH_TABLE_KEY]
+                )
+
+                st.session_state["team_game_save_confirmation"] = {
+                    "sport": team_sport,
+                    "opponent": team_opp,
+                    "date": str(team_date),
+                    "count": len(all_rows_to_add)
+                }
+                
+                st.rerun()
+    
+
+    # ===================================================================
+    # DASHBOARD TAB
+    # ===================================================================
+    with dashboard_tab:
+        coach_df = clean_coach_df(st.session_state.coach_roster_games)
+        if len(coach_df) == 0:
+            st.info("No roster data yet. Add player games in the Enter Roster Stats tab.")
+        else:
+            sports_available = ["All"] + sorted(coach_df["Sport"].dropna().unique().tolist())
+            sport_filter = st.selectbox("Filter by sport", sports_available, key="coach_dash_sport")
+            filtered = coach_df if sport_filter == "All" else coach_df[coach_df["Sport"] == sport_filter]
+            summary = coach_summary(filtered, "All")
+
+            k1, k2, k3, k4 = st.columns(4)
+            with k1: st.metric("Roster Players",    summary["Player"].nunique())
+            with k2: st.metric("Games Logged",       len(filtered))
+            with k3: st.metric("Sports Tracked",     filtered["Sport"].nunique())
+            with k4: st.metric("Avg Games/Player",   round(summary["Games"].mean(), 1))
+
+            st.subheader("Roster Leaderboard")
+            st.markdown("#### How Impact Score Is Calculated")
+            for sn in sorted(summary["Sport"].unique()):
+                st.markdown(get_impact_score_explanation(sn))
+
+            st.dataframe(summary, use_container_width=True, hide_index=True)
+            st.download_button(
+                "⬇️ Download Roster Summary CSV",
+                data=summary.to_csv(index=False).encode("utf-8"),
+                file_name="coach_roster_summary.csv",
+                mime="text/csv",
+            )
+
+            leaders = summary.sort_values("Impact Score", ascending=False).head(12)
+            fig = px.bar(leaders, x="Impact Score", y="Player", color="Sport",
+                         orientation="h", title="Top Players by Impact Score")
+            fig.update_layout(yaxis=dict(autorange="reversed"))
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.subheader("Player Trend Explorer")
+            player_choice = st.selectbox(
+                "Choose player", sorted(filtered["Player"].unique()), key="coach_trend_player"
+            )
+            player_games = filtered[filtered["Player"] == player_choice].sort_values("Date")
+            possible_stats = [
+                c for c in player_games.select_dtypes(include="number").columns
+                if player_games[c].sum() != 0 and c not in ["Team Score", "Opponent Score"]
+            ]
+            if possible_stats:
+                trend_stat = st.selectbox("Choose stat", possible_stats, key="coach_trend_stat")
+                trend_fig = px.line(
+                    player_games, x="Date", y=trend_stat, markers=True,
+                    hover_data=["Opponent", "Sport", "Position"],
+                    title=f"{player_choice}: {trend_stat} Over Time",
+                )
+                st.plotly_chart(trend_fig, use_container_width=True)
+
+    # ===================================================================
+    # PLAYER COMPS TAB
+    # ===================================================================
+    with comps_tab:
+        coach_df = clean_coach_df(st.session_state.coach_roster_games)
+        summary  = coach_summary(coach_df, "All")
+        if len(summary) == 0:
+            st.info("No roster summaries available yet.")
+        else:
+            st.subheader("Find Player Comps")
+            selected_player = st.selectbox(
+                "Choose a roster player", summary["Player"].tolist(), key="coach_comp_player"
+            )
+            profile = get_selected_player_profile(summary, selected_player)
+            if profile is not None:
+                p1, p2, p3 = st.columns(3)
+                with p1: st.metric("Sport",        profile["Sport"])
+                with p2: st.metric("Position",     profile["Position"])
+                with p3: st.metric("Impact Score", round(profile.get("Impact Score", 0), 2))
+
+                st.write("Player profile:")
+                st.dataframe(
+                    pd.DataFrame(profile).reset_index().rename(
+                        columns={"index": "Metric", profile.name: "Value"}
+                    ),
+                    hide_index=True, use_container_width=True,
+                )
+
+                nba_comp_season = "2025-26"
+                mlb_comp_year   = 2025
+                nfl_comp_season = 2025
+
+                if profile["Sport"] == "Basketball":
+                    nba_comp_season = st.selectbox(
+                        "NBA comp season",
+                        ["2022-23", "2023-24", "2024-25", "2025-26"],
+                        index=3, key="coach_nba_comp_season",
+                    )
+                elif profile["Sport"] in ["Baseball Hitting", "Baseball Pitching"]:
+                    mlb_comp_year = st.selectbox(
+                        "MLB comp year", [2023, 2024, 2025], index=2, key="coach_mlb_comp_year"
+                    )
+                elif profile["Sport"] == "Football":
+                    nfl_comp_season = st.selectbox(
+                        "NFL comp season", [2023, 2024, 2025], index=2, key="coach_nfl_comp_season"
+                    )
+
+                comps = find_coach_player_comp(profile, nba_comp_season, mlb_comp_year, nfl_comp_season)
+                if len(comps) > 0:
+                    st.write("Top pro-style comps:")
+                    st.dataframe(comps, hide_index=True, use_container_width=True)
+                    comp_fig = px.bar(
+                        comps, x="Similarity Score", y="Comp", orientation="h",
+                        title=f"Top Comps for {selected_player}",
+                    )
+                    comp_fig.update_layout(yaxis=dict(autorange="reversed"))
+                    st.plotly_chart(comp_fig, use_container_width=True)
+
+    # ===================================================================
+    # DEPTH CHART TAB
+    # ===================================================================
+    with depth_chart_tab:
+        coach_df = clean_coach_df(st.session_state.coach_roster_games)
+        summary  = coach_summary(coach_df, "All")
+
+        if len(summary) == 0:
+            st.info("No roster data yet. Add player games first.")
+        else:
+            st.subheader("Depth Chart Visual")
+            st.caption("Players ranked by Impact Score within each position.")
+
+            depth_sport = st.selectbox(
+                "Choose sport", sorted(summary["Sport"].unique()), key="depth_chart_sport"
+            )
+            depth_summary = summary[summary["Sport"] == depth_sport].copy()
+
+            nba_depth_season = "2025-26"
+            mlb_depth_year   = 2025
+            nfl_depth_season = 2025
+
+            if depth_sport == "Basketball":
+                nba_depth_season = st.selectbox(
+                    "NBA comp season",
+                    ["2022-23", "2023-24", "2024-25", "2025-26"],
+                    index=3, key="depth_nba_season",
+                )
+            elif depth_sport in ["Baseball Hitting", "Baseball Pitching"]:
+                mlb_depth_year = st.selectbox(
+                    "MLB comp year", [2023, 2024, 2025], index=2, key="depth_mlb_year"
+                )
+            elif depth_sport == "Football":
+                nfl_depth_season = st.selectbox(
+                    "NFL comp season", [2023, 2024, 2025], index=2, key="depth_nfl_season"
+                )
+
+            position_order = {
+                "Basketball":        ["PG", "SG", "SF", "PF", "C", "G", "Wing", "F"],
+                "Baseball Hitting":  ["C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"],
+                "Baseball Pitching": ["SP", "RP", "CL"],
+                "Football":          ["QB", "RB", "FB", "WR", "TE",
+                                      "OT", "OG", "C",
+                                      "DE", "DT", "LB", "CB", "S", "K", "P"],
+            }
+
+            ordered = [p for p in position_order.get(depth_sport, [])
+                       if p in depth_summary["Position"].unique()]
+            extras  = sorted([p for p in depth_summary["Position"].unique()
+                               if p not in ordered])
+
+            for pos in ordered + extras:
+                pos_players = (
+                    depth_summary[depth_summary["Position"] == pos]
+                    .sort_values("Impact Score", ascending=False)
+                    .reset_index(drop=True)
+                )
+                st.markdown(f"### {pos}")
+                card_cols = st.columns(min(3, max(1, len(pos_players))))
+
+                for i, (_, player_row) in enumerate(pos_players.iterrows()):
+                    with card_cols[i % len(card_cols)]:
+                        comps = find_coach_player_comp(
+                            player_row, nba_depth_season, mlb_depth_year, nfl_depth_season
+                        )
+                        top_comp = comps.iloc[0]["Comp"] if len(comps) > 0 else "No comp found"
+
+                        st.markdown(
+                            f"""
+                            <div style="
+                                border: 1px solid #ddd;
+                                border-radius: 14px;
+                                padding: 16px;
+                                margin-bottom: 12px;
+                                background-color: #fafafa;
+                            ">
+                                <h4 style="margin-bottom: 4px;">#{i + 1} {player_row["Player"]}</h4>
+                                <p style="margin: 0;"><b>Position:</b> {player_row["Position"]}</p>
+                                <p style="margin: 0;"><b>Games:</b> {int(player_row["Games"])}</p>
+                                <p style="margin: 0;"><b>Impact Score:</b> {round(player_row["Impact Score"], 2)}</p>
+                                <p style="margin-top: 8px;"><b>Pro Comp:</b> {top_comp}</p>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
