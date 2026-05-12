@@ -4,8 +4,9 @@ An interactive full-stack-style sports analytics application built with Python a
 
 - Track and analyze basketball, football, and baseball statistics
 - Compare performances to real professional athletes using similarity algorithms
-- Generate AI-powered custom sports trading cards
-- Create downloadable personalized player cards with dynamic stats and pro comparisons
+- Generate AI-powered coaching insights and scouting reports
+- Create downloadable AI-generated sports trading cards
+- Manage roster-wide analytics through a dedicated Coaches View dashboard
 
 ---
 
@@ -17,31 +18,108 @@ An interactive full-stack-style sports analytics application built with Python a
 
 # Features
 
-## Sports Stat Tracking
+## Multi-Sport Stat Tracking
 
-- Basketball stat tracking and analytics
-- Football stat tracking and player comparison
-- Baseball stat tracking
-- Game logging and performance summaries
+Track and analyze performance across multiple sports:
 
-## Pro Player Comparison Engine
+### Basketball
+- Points, rebounds, assists, steals, blocks, turnovers
+- Performance trend graphs
+- NBA-adjusted stat normalization
 
-Uses weighted statistical similarity formulas to compare user performance against real professional athletes:
+### Football
+- Position-specific tracking:
+  - QB
+  - RB
+  - WR/TE
+  - Defense
+- NFL comparison engine
+- Position-based analytics
+
+### Baseball
+- Hitting analytics
+- Pitching analytics
+- Advanced batting and pitching metrics
+- MLB player comparisons
+
+---
+
+# Coaches View Dashboard
+
+A roster-wide analytics dashboard built for coaches and trainers.
+
+Features include:
+
+- Team game entry system
+- Multi-player stat tracking
+- Position-specific stat forms
+- Roster performance summaries
+- Team leaderboards
+- Performance trend visualizations
+- Athlete comparison tools
+- AI-generated roster analysis
+
+Designed to simulate a lightweight sports analytics platform for youth, high school, and club sports organizations.
+
+---
+
+# AI Coaching System
+
+Integrated AI coaching tools powered by Anthropic and OpenAI APIs.
+
+Features include:
+
+- Personalized player feedback
+- AI-generated performance analysis
+- Strengths and weaknesses summaries
+- Development recommendations
+- Training suggestions
+- Team-level roster reports
+- Automated coaching insights from tracked stats
+
+The AI system dynamically adapts its analysis based on:
+- Sport
+- Position
+- Statistical trends
+- Recent performance history
+
+---
+
+# Pro Player Comparison Engine
+
+Uses weighted statistical similarity formulas to compare user performance against real professional athletes.
+
+### Supported Comparisons
 
 - NBA player comparisons
-- NFL player comparisons
-- Position-specific football comparisons
+- MLB hitter comparisons
+- MLB pitcher comparisons
+- NFL position-specific comparisons
 
-## AI Trading Card Generator
+The system calculates similarity scores using normalized statistical distance metrics.
+
+---
+
+# AI Trading Card Generator
 
 Generate custom AI-enhanced sports trading cards featuring:
 
 - Personalized stats
 - Player images with automatic background removal
-- AI-generated stadium/card backgrounds using DALL·E 3
-- Dynamic pro-player comparisons
-- Team-inspired visual themes
-- Downloadable high-resolution card output
+- AI-generated sports-card-style backgrounds using DALL·E 3
+- Dynamic performance-based card themes
+- Pro-player comparison integration
+- Team-inspired visual aesthetics
+- Downloadable high-resolution cards
+
+### Card Features
+
+- Dynamic rarity-style themes
+- AI-generated premium backgrounds
+- Automatic player cutouts
+- Stat overlays
+- Personalized layouts
+- Position and team customization
 
 ---
 
@@ -90,16 +168,30 @@ Generate custom AI-enhanced sports trading cards featuring:
 2. Background is removed using rembg
 3. DALL·E 3 generates a custom sports-card-style background
 4. Player stats and pro comparisons are calculated
-5. PIL composites the final trading card
-6. User downloads the completed card
+5. Dynamic card themes are generated from performance data
+6. PIL composites the final trading card
+7. User downloads the completed card
+
+---
+
+# User System
+
+The app includes a lightweight user ID system that:
+
+- Separates player data by user
+- Stores persistent stat history locally
+- Supports coach/team workflows
+- Allows multiple users to use the same deployed app independently
 
 ---
 
 # Future Improvements
 
-- User authentication
+- Full authentication system
 - Cloud database integration (Supabase/PostgreSQL)
-- Persistent user accounts
+- Team and organization accounts
 - Mobile-friendly redesign
-- Build out a coaches view
-- Custom trading card rarity systems
+- Live in-game stat tracking
+- AI-generated training plans
+- AI scouting reports
+- Social sharing and highlight generation
